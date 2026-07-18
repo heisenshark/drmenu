@@ -8,51 +8,41 @@
 #include <QDebug>
 #include <QTextStream>
 #include <QVariantList>
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <chrono>
 
 // Wayland Layer Shell support headers
 #include <LayerShellQt/Window>
 
-// ─── CLI Usage ────────────────────────────────────────────────────────────────
-// Items are read from stdin (one per line, like dmenu) OR positional arguments.
-//
-// Line / argument format:
-//   label               → shown as-is, output = label
-//   label\tcommand      → tab-separated: label shown, command executed + label printed
-//   label:icon          → colon-separated: label shown with emoji icon
-//   label:icon\tcommand → both icon and command
-//
-// On selection → selected label is written to stdout, exit 0
-// On Escape    → nothing written,                    exit 1
-// ─────────────────────────────────────────────────────────────────────────────
+const QString SOCKET_NAME = "drmenu-socket";
 
 struct MenuItem {
     QString label;
     QString icon;
-    QString command; // if empty, just print label to stdout
+    QString command;
 };
 
-// Parse a single entry string into a MenuItem.
-// Supported formats: "label", "label\tcommand", "label:icon", "label:icon\tcommand"
 static MenuItem parseEntry(const QString &entry) {
     MenuItem item;
-    // Split on tab first to separate label-side from command
     QStringList tabParts = entry.split('\t');
     QString labelSide = tabParts.value(0).trimmed();
     item.command      = tabParts.size() > 1 ? tabParts[1].trimmed() : QString();
 
-    // Split label-side on first ':' to get optional icon
     int colonIdx = labelSide.indexOf(':');
     if (colonIdx > 0) {
         item.label = labelSide.left(colonIdx).trimmed();
         item.icon  = labelSide.mid(colonIdx + 1).trimmed();
     } else {
         item.label = labelSide;
-        item.icon  = QString(); // QML will use a default
+        item.icon  = QString();
     }
     return item;
 }
 
-// Build QVariantList for QML from parsed MenuItems.
 static QVariantList buildModel(const QList<MenuItem> &items) {
     QVariantList list;
     for (const MenuItem &item : items) {
@@ -65,7 +55,6 @@ static QVariantList buildModel(const QList<MenuItem> &items) {
     return list;
 }
 
-// ─── Hyprland screen & cursor detection ────────────────────────────────────────
 struct TargetScreenInfo {
     QString monitorName;
     int localX = -1;
@@ -143,45 +132,203 @@ static TargetScreenInfo getTargetScreenInfo() {
     return info;
 }
 
-// ─── Selection output helper ──────────────────────────────────────────────────
-// Exposed to QML to print the selected label and exit.
+// ── Output controller exposed to QML ──
 class Output : public QObject {
     Q_OBJECT
+    Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
 public:
     explicit Output(QObject *parent = nullptr) : QObject(parent) {}
 
+    QVariantList items() const { return m_items; }
+
+    void setItems(const QVariantList &items) {
+        m_items = items;
+        emit itemsChanged();
+    }
+
+    std::function<void(const QString &)> onSelectCallback;
+    std::function<void()> onCancelCallback;
+
     Q_INVOKABLE void select(const QString &label) {
-        QTextStream out(stdout);
-        out << label << "\n";
-        out.flush();
-        QCoreApplication::exit(0);
+        if (onSelectCallback) onSelectCallback(label);
     }
 
     Q_INVOKABLE void cancel() {
-        QCoreApplication::exit(1);
+        if (onCancelCallback) onCancelCallback();
     }
+
+Q_SIGNALS:
+    void itemsChanged();
+
+private:
+    QVariantList m_items;
 };
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-int main(int argc, char *argv[]) {
+// ── Run Daemon Mode ───────────────────────────────────────────────────────────
+static int runDaemon(int argc, char *argv[]) {
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName("drmenu");
-    app.setApplicationVersion("0.2.0");
+    app.setApplicationName("drmenu-daemon");
 
-    // ── Parse items ──────────────────────────────────────────────────────────
+    // Remove any stale socket
+    QLocalServer::removeServer(SOCKET_NAME);
+
+    QLocalServer server;
+    if (!server.listen(SOCKET_NAME)) {
+        qWarning() << "Failed to start drmenu daemon server:" << server.errorString();
+        return 1;
+    }
+
+    qDebug() << "[drmenu daemon] Started successfully on socket:" << SOCKET_NAME;
+
+    QQmlApplicationEngine engine;
+    Output output;
+    engine.rootContext()->setContextProperty("output", &output);
+
+    const QUrl url(QStringLiteral("qrc:/drmenu/src/qml/main.qml"));
+
+    QQuickWindow *window = nullptr;
+
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
+                     &app, [&window, url](QObject *obj, const QUrl &objUrl) {
+        if (!obj && url == objUrl)
+            QCoreApplication::exit(-1);
+
+        window = qobject_cast<QQuickWindow*>(obj);
+        if (!window) return;
+
+        auto layerWindow = LayerShellQt::Window::get(window);
+        if (layerWindow) {
+            layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
+            layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
+            layerWindow->setAnchors(LayerShellQt::Window::Anchors(
+                LayerShellQt::Window::AnchorTop    |
+                LayerShellQt::Window::AnchorBottom |
+                LayerShellQt::Window::AnchorLeft   |
+                LayerShellQt::Window::AnchorRight));
+            layerWindow->setExclusiveZone(-1);
+        }
+    }, Qt::QueuedConnection);
+
+    engine.load(url);
+
+    // Active client socket currently serving a request
+    QLocalSocket *activeClientSocket = nullptr;
+
+    output.onSelectCallback = [&activeClientSocket, &window](const QString &label) {
+        if (activeClientSocket && activeClientSocket->isOpen()) {
+            activeClientSocket->write(("SELECTED\t" + label + "\n").toUtf8());
+            activeClientSocket->flush();
+            activeClientSocket->disconnectFromServer();
+            activeClientSocket = nullptr;
+        }
+        if (window) window->setVisible(false);
+    };
+
+    output.onCancelCallback = [&activeClientSocket, &window]() {
+        if (activeClientSocket && activeClientSocket->isOpen()) {
+            activeClientSocket->write("CANCELLED\n");
+            activeClientSocket->flush();
+            activeClientSocket->disconnectFromServer();
+            activeClientSocket = nullptr;
+        }
+        if (window) window->setVisible(false);
+    };
+
+    QObject::connect(&server, &QLocalServer::newConnection, [&]() {
+        QLocalSocket *clientSocket = server.nextPendingConnection();
+        if (!clientSocket) return;
+
+        QObject::connect(clientSocket, &QLocalSocket::readyRead, [clientSocket, &window, &output, &activeClientSocket]() {
+            auto t_req_start = std::chrono::high_resolution_clock::now();
+
+            QByteArray data = clientSocket->readAll();
+            QString rawInput = QString::fromUtf8(data).trimmed();
+
+            QList<MenuItem> items;
+            for (const QString &line : rawInput.split('\n')) {
+                if (!line.trimmed().isEmpty())
+                    items.append(parseEntry(line));
+            }
+
+            if (items.isEmpty()) {
+                clientSocket->write("CANCELLED\n");
+                clientSocket->disconnectFromServer();
+                return;
+            }
+
+            activeClientSocket = clientSocket;
+
+            // Update QML model reactively via Output property
+            output.setItems(buildModel(items));
+
+            // Query cursor position
+            TargetScreenInfo targetInfo = getTargetScreenInfo();
+
+            if (window) {
+                auto layerWindow = LayerShellQt::Window::get(window);
+                QScreen *targetScreen = nullptr;
+                if (!targetInfo.monitorName.isEmpty()) {
+                    for (QScreen *s : QGuiApplication::screens()) {
+                        if (s->name() == targetInfo.monitorName) {
+                            targetScreen = s;
+                            break;
+                        }
+                    }
+                }
+                if (!targetScreen)
+                    targetScreen = QGuiApplication::primaryScreen();
+
+                if (layerWindow && targetScreen)
+                    layerWindow->setScreen(targetScreen);
+
+                if (targetScreen) {
+                    int localX = targetInfo.localX;
+                    int localY = targetInfo.localY;
+                    if (localX < 0 || localY < 0) {
+                        localX = targetScreen->geometry().width() / 2;
+                        localY = targetScreen->geometry().height() / 2;
+                    }
+                    window->setProperty("menuX", localX);
+                    window->setProperty("menuY", localY);
+                }
+
+                window->setVisible(true);
+                window->raise();
+                window->requestActivate();
+            }
+
+            auto t_req_end = std::chrono::high_resolution_clock::now();
+            double ms_daemon_pop = std::chrono::duration<double, std::milli>(t_req_end - t_req_start).count();
+            qDebug() << "[drmenu daemon] Request handled & popup visible in:" << ms_daemon_pop << "ms";
+        });
+    });
+
+    return app.exec();
+}
+
+// ── Run Client / Standalone Mode ──────────────────────────────────────────────
+int main(int argc, char *argv[]) {
+    // Check if --daemon or -d passed
+    for (int i = 1; i < argc; ++i) {
+        if (QString(argv[i]) == "--daemon" || QString(argv[i]) == "-d") {
+            return runDaemon(argc, argv);
+        }
+    }
+
+    // Read input items from args or stdin
     QList<MenuItem> items;
-    QStringList posArgs = app.arguments().mid(1); // skip argv[0]
+    QStringList posArgs;
+    for (int i = 1; i < argc; ++i)
+        posArgs.append(argv[i]);
 
     if (!posArgs.isEmpty()) {
-        // Items from command-line arguments
         for (const QString &arg : posArgs)
             items.append(parseEntry(arg));
     } else {
-        // Items from stdin (dmenu style: one per line)
         QTextStream in(stdin);
         while (!in.atEnd()) {
             QString line = in.readLine();
@@ -194,24 +341,80 @@ int main(int argc, char *argv[]) {
         QTextStream err(stderr);
         err << "drmenu: no items provided.\n"
             << "Usage:\n"
+            << "  drmenu --daemon              (start background daemon)\n"
             << "  echo -e 'Item1\\nItem2' | drmenu\n"
-            << "  drmenu 'Item1' 'Item2'\n"
-            << "  drmenu 'Label:icon\\tcommand' ...\n";
+            << "  drmenu 'Item1' 'Item2'\n";
         return 1;
     }
 
-    // ── Detect screen & cursor pos under mouse (before event loop) ────────────
-    const TargetScreenInfo targetInfo = getTargetScreenInfo();
+    // Try connecting to running daemon socket
+    QLocalSocket socket;
+    socket.connectToServer(SOCKET_NAME);
+    if (socket.waitForConnected(50)) {
+        // Daemon is running! Fast client path (< 5ms)
+        auto t_client_start = std::chrono::high_resolution_clock::now();
 
-    // ── Set up QML engine ─────────────────────────────────────────────────────
+        QString payload;
+        for (const MenuItem &item : items) {
+            payload += item.label;
+            if (!item.icon.isEmpty()) payload += ":" + item.icon;
+            if (!item.command.isEmpty()) payload += "\t" + item.command;
+            payload += "\n";
+        }
+        socket.write(payload.toUtf8());
+        socket.flush();
+
+        if (socket.waitForReadyRead(30000)) {
+            QByteArray response = socket.readAll().trimmed();
+            QString respStr = QString::fromUtf8(response);
+
+            auto t_client_end = std::chrono::high_resolution_clock::now();
+            double ms_client = std::chrono::duration<double, std::milli>(t_client_end - t_client_start).count();
+
+            if (respStr.startsWith("SELECTED\t")) {
+                QString selected = respStr.mid(9);
+                QTextStream out(stdout);
+                out << selected << "\n";
+                out.flush();
+
+                QTextStream err(stderr);
+                err << "[drmenu daemon client latency: " << QString::number(ms_client, 'f', 2) << " ms]\n";
+                return 0;
+            }
+        }
+        return 1; // Cancelled
+    }
+
+    // Fallback: Run Standalone inline if daemon is not active
+    auto t_start = std::chrono::high_resolution_clock::now();
+
+    qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+
+    QGuiApplication app(argc, argv);
+    app.setApplicationName("drmenu");
+
+    TargetScreenInfo targetInfo = getTargetScreenInfo();
+
     QQmlApplicationEngine engine;
     Output output;
+    output.onSelectCallback = [](const QString &label) {
+        QTextStream out(stdout);
+        out << label << "\n";
+        out.flush();
+        QCoreApplication::exit(0);
+    };
+    output.onCancelCallback = []() {
+        QCoreApplication::exit(1);
+    };
+
     engine.rootContext()->setContextProperty("output", &output);
-    engine.rootContext()->setContextProperty("menuItems", buildModel(items));
+    output.setItems(buildModel(items));
 
     const QUrl url(QStringLiteral("qrc:/drmenu/src/qml/main.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [url, targetInfo](QObject *obj, const QUrl &objUrl) {
+                     &app, [url, targetInfo, t_start](QObject *obj, const QUrl &objUrl) {
         if (!obj && url == objUrl)
             QCoreApplication::exit(-1);
 
@@ -219,44 +422,46 @@ int main(int argc, char *argv[]) {
         if (!window) return;
 
         auto layerWindow = LayerShellQt::Window::get(window);
-        if (!layerWindow) return;
-
-        // Match focused monitor name to QScreen* (screens() is populated here)
-        QScreen *targetScreen = nullptr;
-        if (!targetInfo.monitorName.isEmpty()) {
-            for (QScreen *s : QGuiApplication::screens()) {
-                if (s->name() == targetInfo.monitorName) {
-                    targetScreen = s;
-                    break;
+        if (layerWindow) {
+            QScreen *targetScreen = nullptr;
+            if (!targetInfo.monitorName.isEmpty()) {
+                for (QScreen *s : QGuiApplication::screens()) {
+                    if (s->name() == targetInfo.monitorName) {
+                        targetScreen = s;
+                        break;
+                    }
                 }
             }
-        }
-        if (!targetScreen)
-            targetScreen = QGuiApplication::primaryScreen();
+            if (!targetScreen)
+                targetScreen = QGuiApplication::primaryScreen();
 
-        layerWindow->setScreen(targetScreen);
-        layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-        layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
-        layerWindow->setAnchors(LayerShellQt::Window::Anchors(
-            LayerShellQt::Window::AnchorTop    |
-            LayerShellQt::Window::AnchorBottom |
-            LayerShellQt::Window::AnchorLeft   |
-            LayerShellQt::Window::AnchorRight));
-        layerWindow->setExclusiveZone(-1);
+            if (targetScreen) layerWindow->setScreen(targetScreen);
+            layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
+            layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
+            layerWindow->setAnchors(LayerShellQt::Window::Anchors(
+                LayerShellQt::Window::AnchorTop    |
+                LayerShellQt::Window::AnchorBottom |
+                LayerShellQt::Window::AnchorLeft   |
+                LayerShellQt::Window::AnchorRight));
+            layerWindow->setExclusiveZone(-1);
 
-        // Pass local cursor coordinates to QML window properties menuX & menuY
-        if (targetScreen) {
-            int localX = targetInfo.localX;
-            int localY = targetInfo.localY;
-            if (localX < 0 || localY < 0) {
-                localX = targetScreen->geometry().width() / 2;
-                localY = targetScreen->geometry().height() / 2;
+            if (targetScreen) {
+                int localX = targetInfo.localX;
+                int localY = targetInfo.localY;
+                if (localX < 0 || localY < 0) {
+                    localX = targetScreen->geometry().width() / 2;
+                    localY = targetScreen->geometry().height() / 2;
+                }
+                window->setProperty("menuX", localX);
+                window->setProperty("menuY", localY);
             }
-            window->setProperty("menuX", localX);
-            window->setProperty("menuY", localY);
         }
-
         window->setVisible(true);
+
+        auto t_visible = std::chrono::high_resolution_clock::now();
+        double ms_total = std::chrono::duration<double, std::milli>(t_visible - t_start).count();
+        QTextStream err(stderr);
+        err << "[drmenu standalone launch latency: " << QString::number(ms_total, 'f', 2) << " ms]\n";
 
     }, Qt::QueuedConnection);
 
