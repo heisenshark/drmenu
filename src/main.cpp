@@ -65,28 +65,35 @@ static QVariantList buildModel(const QList<MenuItem> &items) {
     return list;
 }
 
-// ─── Hyprland screen detection ────────────────────────────────────────────────
-static QString hyprlandMonitorUnderCursor() {
+// ─── Hyprland screen & cursor detection ────────────────────────────────────────
+struct TargetScreenInfo {
+    QString monitorName;
+    int localX = -1;
+    int localY = -1;
+};
+
+static TargetScreenInfo getTargetScreenInfo() {
+    TargetScreenInfo info;
     if (qgetenv("HYPRLAND_INSTANCE_SIGNATURE").isEmpty())
-        return {};
+        return info;
 
     QProcess cursorProc;
     cursorProc.start("hyprctl", {"cursorpos"});
     cursorProc.waitForFinished(2000);
-    if (cursorProc.exitCode() != 0) return {};
+    if (cursorProc.exitCode() != 0) return info;
 
     QString cursorOut = QString::fromUtf8(cursorProc.readAllStandardOutput()).trimmed();
     QStringList parts = cursorOut.split(',');
-    if (parts.size() < 2) return {};
+    if (parts.size() < 2) return info;
     bool okX, okY;
     int cx = parts[0].trimmed().toInt(&okX);
     int cy = parts[1].trimmed().toInt(&okY);
-    if (!okX || !okY) return {};
+    if (!okX || !okY) return info;
 
     QProcess monitorsProc;
     monitorsProc.start("hyprctl", {"monitors", "-j"});
     monitorsProc.waitForFinished(2000);
-    if (monitorsProc.exitCode() != 0) return {};
+    if (monitorsProc.exitCode() != 0) return info;
 
     QString json = QString::fromUtf8(monitorsProc.readAllStandardOutput());
 
@@ -124,12 +131,16 @@ static QString hyprlandMonitorUnderCursor() {
         int mw = extractInt(block, "width");
         int mh = extractInt(block, "height");
         if (!name.isEmpty() && mw > 0 && mh > 0) {
-            if (cx >= mx && cx < mx + mw && cy >= my && cy < my + mh)
-                return name;
+            if (cx >= mx && cx < mx + mw && cy >= my && cy < my + mh) {
+                info.monitorName = name;
+                info.localX = cx - mx;
+                info.localY = cy - my;
+                return info;
+            }
         }
         pos = blockEnd + 1;
     }
-    return {};
+    return info;
 }
 
 // ─── Selection output helper ──────────────────────────────────────────────────
@@ -189,8 +200,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // ── Detect screen under cursor (before event loop) ────────────────────────
-    const QString focusedMonitorName = hyprlandMonitorUnderCursor();
+    // ── Detect screen & cursor pos under mouse (before event loop) ────────────
+    const TargetScreenInfo targetInfo = getTargetScreenInfo();
 
     // ── Set up QML engine ─────────────────────────────────────────────────────
     QQmlApplicationEngine engine;
@@ -200,7 +211,7 @@ int main(int argc, char *argv[]) {
 
     const QUrl url(QStringLiteral("qrc:/drmenu/src/qml/main.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [url, focusedMonitorName](QObject *obj, const QUrl &objUrl) {
+                     &app, [url, targetInfo](QObject *obj, const QUrl &objUrl) {
         if (!obj && url == objUrl)
             QCoreApplication::exit(-1);
 
@@ -212,9 +223,9 @@ int main(int argc, char *argv[]) {
 
         // Match focused monitor name to QScreen* (screens() is populated here)
         QScreen *targetScreen = nullptr;
-        if (!focusedMonitorName.isEmpty()) {
+        if (!targetInfo.monitorName.isEmpty()) {
             for (QScreen *s : QGuiApplication::screens()) {
-                if (s->name() == focusedMonitorName) {
+                if (s->name() == targetInfo.monitorName) {
                     targetScreen = s;
                     break;
                 }
@@ -232,6 +243,18 @@ int main(int argc, char *argv[]) {
             LayerShellQt::Window::AnchorLeft   |
             LayerShellQt::Window::AnchorRight));
         layerWindow->setExclusiveZone(-1);
+
+        // Pass local cursor coordinates to QML window properties menuX & menuY
+        if (targetScreen) {
+            int localX = targetInfo.localX;
+            int localY = targetInfo.localY;
+            if (localX < 0 || localY < 0) {
+                localX = targetScreen->geometry().width() / 2;
+                localY = targetScreen->geometry().height() / 2;
+            }
+            window->setProperty("menuX", localX);
+            window->setProperty("menuY", localY);
+        }
 
         window->setVisible(true);
 
