@@ -4,6 +4,7 @@ project(drmenu VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Enable automatic Qt compiler wrapper generation (signals, slots, resources)
 set(CMAKE_AUTOMOC ON)
@@ -20,6 +21,12 @@ qt_standard_project_setup()
 # Define executable and sources
 qt_add_executable(drmenu
     src/main.cpp
+    src/cli_parser.cpp
+    src/screen_detector.cpp
+    src/output_controller.cpp
+    src/daemon.cpp
+    src/client.cpp
+    src/standalone_app.cpp
 )
 
 # Place binary in a 'bin' subdirectory to avoid conflicts with QML module directories
