@@ -11,6 +11,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QScreen>
+#include <QProcess>
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -31,14 +32,12 @@ int DaemonServer::run(int argc, char *argv[]) {
     app.setApplicationName("drmenu-daemon");
 
     QLocalServer::removeServer(SOCKET_NAME);
-
     QLocalServer server;
     if (!server.listen(SOCKET_NAME)) {
-        qWarning() << "Failed to start drmenu daemon server:" << server.errorString();
+        qWarning() << "Failed to start drmenu daemon:" << server.errorString();
         return 1;
     }
-
-    qDebug() << "[drmenu daemon] Started successfully on socket:" << SOCKET_NAME;
+    qDebug() << "[drmenu daemon] Listening on socket:" << SOCKET_NAME;
 
     QQmlApplicationEngine engine;
     OutputController output;
@@ -49,8 +48,7 @@ int DaemonServer::run(int argc, char *argv[]) {
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [&window, url](QObject *obj, const QUrl &objUrl) {
-        if (!obj && url == objUrl)
-            QCoreApplication::exit(-1);
+        if (!obj && url == objUrl) QCoreApplication::exit(-1);
 
         window = qobject_cast<QQuickWindow*>(obj);
         if (!window) return;
@@ -72,8 +70,35 @@ int DaemonServer::run(int argc, char *argv[]) {
     engine.load(url);
 
     QLocalSocket *activeClientSocket = nullptr;
+    // Label→command map for the currently active menu session
+    QMap<QString, QString> activeCommandMap;
 
-    output.onSelectCallback = [&activeClientSocket, &window](const QString &label) {
+    auto buildCommandMap = [](const QVariantMap &allMenus) {
+        QMap<QString, QString> map;
+        for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
+            QVariant val = it.value();
+            QVariantList itemList = (val.typeId() == QMetaType::QVariantMap)
+                ? val.toMap()["items"].toList()
+                : val.toList();
+
+            for (const QVariant &v : itemList) {
+                QVariantMap item = v.toMap();
+                QString label   = item["label"].toString();
+                QString command = item["command"].toString();
+                if (!label.isEmpty() && !command.isEmpty())
+                    map[label] = command;
+            }
+        }
+        return map;
+    };
+
+    output.onSelectCallback = [&activeClientSocket, &window, &activeCommandMap](const QString &label) {
+        // Run the command for this label if one exists
+        auto it = activeCommandMap.find(label);
+        if (it != activeCommandMap.end())
+            QProcess::startDetached("sh", {"-c", it.value()});
+
+        // Notify client
         if (activeClientSocket && activeClientSocket->isOpen()) {
             activeClientSocket->write(("SELECTED\t" + label + "\n").toUtf8());
             activeClientSocket->flush();
@@ -81,9 +106,10 @@ int DaemonServer::run(int argc, char *argv[]) {
             activeClientSocket = nullptr;
         }
         if (window) window->setVisible(false);
+        activeCommandMap.clear();
     };
 
-    output.onCancelCallback = [&activeClientSocket, &window]() {
+    output.onCancelCallback = [&activeClientSocket, &window, &activeCommandMap]() {
         if (activeClientSocket && activeClientSocket->isOpen()) {
             activeClientSocket->write("CANCELLED\n");
             activeClientSocket->flush();
@@ -91,74 +117,108 @@ int DaemonServer::run(int argc, char *argv[]) {
             activeClientSocket = nullptr;
         }
         if (window) window->setVisible(false);
+        activeCommandMap.clear();
     };
 
     QObject::connect(&server, &QLocalServer::newConnection, [&]() {
         QLocalSocket *clientSocket = server.nextPendingConnection();
         if (!clientSocket) return;
 
-        QObject::connect(clientSocket, &QLocalSocket::readyRead, [clientSocket, &window, &output, &activeClientSocket]() {
-            auto t_req_start = std::chrono::high_resolution_clock::now();
+        QObject::connect(clientSocket, &QLocalSocket::readyRead,
+                         [clientSocket, &window, &output, &activeClientSocket,
+                          &activeCommandMap, &buildCommandMap]() {
+            auto t_start = std::chrono::high_resolution_clock::now();
 
             QByteArray data = clientSocket->readAll();
             QString rawInput = QString::fromUtf8(data).trimmed();
 
-            QList<MenuItem> items;
             QJsonParseError jsonErr;
             QJsonDocument doc = QJsonDocument::fromJson(data, &jsonErr);
-            if (jsonErr.error == QJsonParseError::NoError && doc.isArray()) {
-                for (const QJsonValue &v : doc.array()) {
-                    QJsonObject obj = v.toObject();
-                    MenuItem it;
-                    it.label    = obj["label"].toString();
-                    it.icon     = obj["icon"].toString();
-                    it.iconName = obj["iconName"].toString();
-                    it.command  = obj["command"].toString();
-                    if (!it.label.isEmpty()) items.append(it);
+            bool spawnAtMouse = true;
+
+            if (jsonErr.error == QJsonParseError::NoError && doc.isObject()) {
+                QJsonObject payload = doc.object();
+                QString type = payload["type"].toString();
+                spawnAtMouse = payload["spawnAtMouse"].toBool(true);
+                bool escapeClosesAll = payload["escapeClosesAll"].toBool(false);
+
+                if (type == "menus") {
+                    QVariantMap allMenus;
+                    for (const QString &key : payload["menus"].toObject().keys())
+                        allMenus[key] = payload["menus"].toObject()[key].toArray().toVariantList();
+
+                    QString initial = payload["initialMenu"].toString();
+                    if (allMenus.isEmpty() || initial.isEmpty()) {
+                        clientSocket->write("CANCELLED\n");
+                        clientSocket->disconnectFromServer();
+                        return;
+                    }
+
+                    activeClientSocket = clientSocket;
+                    activeCommandMap   = buildCommandMap(allMenus);
+                    output.setMenuData(allMenus, initial, spawnAtMouse, escapeClosesAll);
+
+                } else {
+                    // Inline item list
+                    QList<MenuItem> items;
+                    for (const QJsonValue &v : payload["items"].toArray()) {
+                        QJsonObject obj = v.toObject();
+                        MenuItem it;
+                        it.label       = obj["label"].toString();
+                        it.icon        = obj["icon"].toString();
+                        it.iconName    = obj["iconName"].toString();
+                        it.command     = obj["command"].toString();
+                        it.submenuName = obj["submenuName"].toString();
+                        if (!it.label.isEmpty()) items.append(it);
+                    }
+                    if (items.isEmpty()) {
+                        clientSocket->write("CANCELLED\n");
+                        clientSocket->disconnectFromServer();
+                        return;
+                    }
+                    activeClientSocket = clientSocket;
+                    for (const MenuItem &item : items)
+                        if (!item.command.isEmpty()) activeCommandMap[item.label] = item.command;
+                    output.setItems(CliParser::buildModel(items));
                 }
+
             } else {
-                // Fallback: plain-text lines (legacy / stdin piping)
-                for (const QString &line : rawInput.split('\n')) {
+                // Plain text fallback
+                QList<MenuItem> items;
+                for (const QString &line : rawInput.split('\n'))
                     if (!line.trimmed().isEmpty())
                         items.append(CliParser::parseEntry(line));
+                if (items.isEmpty()) {
+                    clientSocket->write("CANCELLED\n");
+                    clientSocket->disconnectFromServer();
+                    return;
                 }
+                activeClientSocket = clientSocket;
+                for (const MenuItem &item : items)
+                    if (!item.command.isEmpty()) activeCommandMap[item.label] = item.command;
+                output.setItems(CliParser::buildModel(items));
             }
 
-            if (items.isEmpty()) {
-                clientSocket->write("CANCELLED\n");
-                clientSocket->disconnectFromServer();
-                return;
-            }
-
-            activeClientSocket = clientSocket;
-            output.setItems(CliParser::buildModel(items));
-
-            TargetScreenInfo targetInfo = ScreenDetector::getTargetScreenInfo();
-
+            // Position the window
             if (window) {
                 auto layerWindow = LayerShellQt::Window::get(window);
+                TargetScreenInfo targetInfo = spawnAtMouse
+                    ? ScreenDetector::getTargetScreenInfo()
+                    : TargetScreenInfo{};
+
                 QScreen *targetScreen = nullptr;
                 if (!targetInfo.monitorName.isEmpty()) {
                     for (QScreen *s : QGuiApplication::screens()) {
-                        if (s->name() == targetInfo.monitorName) {
-                            targetScreen = s;
-                            break;
-                        }
+                        if (s->name() == targetInfo.monitorName) { targetScreen = s; break; }
                     }
                 }
-                if (!targetScreen)
-                    targetScreen = QGuiApplication::primaryScreen();
+                if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
 
-                if (layerWindow && targetScreen)
-                    layerWindow->setScreen(targetScreen);
+                if (layerWindow && targetScreen) layerWindow->setScreen(targetScreen);
 
                 if (targetScreen) {
-                    int localX = targetInfo.localX;
-                    int localY = targetInfo.localY;
-                    if (localX < 0 || localY < 0) {
-                        localX = targetScreen->geometry().width() / 2;
-                        localY = targetScreen->geometry().height() / 2;
-                    }
+                    int localX = targetInfo.localX < 0 ? targetScreen->geometry().width()  / 2 : targetInfo.localX;
+                    int localY = targetInfo.localY < 0 ? targetScreen->geometry().height() / 2 : targetInfo.localY;
                     window->setProperty("menuX", localX);
                     window->setProperty("menuY", localY);
                 }
@@ -168,9 +228,9 @@ int DaemonServer::run(int argc, char *argv[]) {
                 window->requestActivate();
             }
 
-            auto t_req_end = std::chrono::high_resolution_clock::now();
-            double ms_daemon_pop = std::chrono::duration<double, std::milli>(t_req_end - t_req_start).count();
-            qDebug() << "[drmenu daemon] Request handled & popup visible in:" << ms_daemon_pop << "ms";
+            auto t_end = std::chrono::high_resolution_clock::now();
+            double ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+            qDebug() << "[drmenu daemon] popup in:" << ms << "ms";
         });
     });
 

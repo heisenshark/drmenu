@@ -12,8 +12,7 @@ ApplicationWindow {
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.BypassWindowManagerHint
     color: "transparent"
 
-    // Center of the radial menu (set by C++ to cursor position, clamped to screen)
-    property real menuX: width / 2
+    property real menuX: width  / 2
     property real menuY: height / 2
 
     onVisibleChanged: {
@@ -24,54 +23,181 @@ ApplicationWindow {
         }
     }
 
-    Shortcut {
-        sequence: "Escape"
-        onActivated: output.cancel()
+    // ── Navigation state ───────────────────────────────────────────────────────
+    property var  menuStack:    []     // stack of menu names (strings)
+    property bool hasParent:    false  // true when not at root
+
+    function updatePositionForMenu(menuData) {
+        let spawnAtMouse = (menuData && menuData.spawnAtMouse !== undefined)
+            ? menuData.spawnAtMouse
+            : output.spawnAtMouse
+
+        if (spawnAtMouse) {
+            let mPos = output.getMousePosition()
+            if (mPos && typeof mPos.x === "number" && mPos.x >= 0 && typeof mPos.y === "number" && mPos.y >= 0) {
+                root.menuX = mPos.x
+                root.menuY = mPos.y
+            }
+        } else {
+            root.menuX = root.width / 2
+            root.menuY = root.height / 2
+        }
     }
 
+    function navigateTo(menuName) {
+        let menuData = output.menus[menuName]
+        if (!menuData) return
+
+        let targetItems = (menuData.items !== undefined) ? menuData.items : menuData
+        if (!targetItems || targetItems.length === 0) return
+
+        updatePositionForMenu(menuData)
+
+        menuStack = menuStack.concat([menuName])
+        hasParent = menuStack.length > 1
+        transitionOut.stopped.connect(function onStopped() {
+            transitionOut.stopped.disconnect(onStopped)
+            loadItems(targetItems)
+            transitionIn.start()
+        })
+        transitionOut.start()
+    }
+
+    function goBack() {
+        if (menuStack.length <= 1) { output.cancel(); return }
+        let newStack = menuStack.slice(0, menuStack.length - 1)
+        menuStack = newStack
+        hasParent = menuStack.length > 1
+        let parentName = menuStack[menuStack.length - 1]
+        let parentData = output.menus[parentName]
+        let parentItems = (parentData && parentData.items !== undefined) ? parentData.items : parentData
+
+        updatePositionForMenu(parentData)
+
+        transitionOut.stopped.connect(function onStopped() {
+            transitionOut.stopped.disconnect(onStopped)
+            loadItems(parentItems)
+            transitionIn.start()
+        })
+        transitionOut.start()
+    }
+
+    function handleEscape() {
+        let currentMenuName = menuStack.length > 0 ? menuStack[menuStack.length - 1] : ""
+        let menuData = currentMenuName ? output.menus[currentMenuName] : null
+        let closeAll = (menuData && menuData.escapeClosesAll !== undefined)
+            ? menuData.escapeClosesAll
+            : output.escapeClosesAll
+
+        if (closeAll) {
+            output.cancel()
+        } else {
+            root.goBack()
+        }
+    }
+
+    function loadItems(itemList) {
+        menuModel.clear()
+        if (!itemList) return
+        for (let i = 0; i < itemList.length; ++i) {
+            let e = itemList[i]
+            menuModel.append({
+                label:       e.label       || "",
+                icon:        e.icon        || "",
+                iconName:    e.iconName    || "",
+                command:     e.command     || "",
+                submenuName: e.submenuName || ""
+            })
+        }
+        menuContainer.hoveredIndex = -1
+    }
+
+    // ── Data wiring ────────────────────────────────────────────────────────────
+    Connections {
+        target: output
+
+        // Config / nested menus mode
+        function onMenusChanged() {
+            if (!output.initialMenu) return
+            let initData = output.menus[output.initialMenu]
+            if (!initData) return
+            let items = (initData.items !== undefined) ? initData.items : initData
+
+            updatePositionForMenu(initData)
+
+            menuStack = [output.initialMenu]
+            hasParent = false
+            loadItems(items)
+        }
+
+        // Inline / stdin mode
+        function onItemsChanged() {
+            menuStack = []
+            hasParent = false
+
+            if (output.spawnAtMouse) {
+                let mPos = output.getMousePosition()
+                if (mPos && mPos.x >= 0 && mPos.y >= 0) {
+                    root.menuX = mPos.x
+                    root.menuY = mPos.y
+                }
+            } else {
+                root.menuX = root.width / 2
+                root.menuY = root.height / 2
+            }
+
+            loadItems(output.items)
+        }
+    }
+
+    Component.onCompleted: {
+        if (typeof output === "undefined") return
+        if (output.initialMenu) {
+            let initData = output.menus[output.initialMenu]
+            if (initData) {
+                let items = (initData.items !== undefined) ? initData.items : initData
+                updatePositionForMenu(initData)
+                menuStack = [output.initialMenu]
+                hasParent = false
+                loadItems(items)
+            }
+        } else if (output.items && output.items.length > 0) {
+            menuStack = []
+            hasParent = false
+            loadItems(output.items)
+        }
+    }
+
+    // ── Keyboard ───────────────────────────────────────────────────────────────
+    Shortcut {
+        sequence: "Escape"
+        onActivated: root.handleEscape()
+    }
+
+    // ── Open animation ─────────────────────────────────────────────────────────
     ParallelAnimation {
         id: openAnimation
         NumberAnimation { target: menuContainer; property: "scale";   from: 0.6; to: 1.0; duration: 180; easing.type: Easing.OutCubic }
         NumberAnimation { target: menuContainer; property: "opacity"; from: 0.0; to: 1.0; duration: 140 }
     }
 
-    ListModel {
-        id: menuModel
+    // ── Navigation transition: fade-scale out then in ──────────────────────────
+    SequentialAnimation {
+        id: transitionOut
+        ParallelAnimation {
+            NumberAnimation { target: menuContainer; property: "scale";   to: 0.75; duration: 110; easing.type: Easing.InQuad }
+            NumberAnimation { target: menuContainer; property: "opacity"; to: 0.0;  duration: 90  }
+        }
     }
-
-    Connections {
-        target: output
-        function onItemsChanged() {
-            menuModel.clear()
-            let list = output.items
-            if (list) {
-                for (let i = 0; i < list.length; ++i) {
-                    let e = list[i]
-                    menuModel.append({
-                        label:    e.label    || "",
-                        icon:     e.icon     || "",
-                        iconName: e.iconName || "",
-                        command:  e.command  || ""
-                    })
-                }
-            }
+    SequentialAnimation {
+        id: transitionIn
+        ParallelAnimation {
+            NumberAnimation { target: menuContainer; property: "scale";   from: 1.2; to: 1.0; duration: 150; easing.type: Easing.OutCubic }
+            NumberAnimation { target: menuContainer; property: "opacity"; from: 0.0; to: 1.0; duration: 130 }
         }
     }
 
-    Component.onCompleted: {
-        if (typeof output !== "undefined" && output.items) {
-            let list = output.items
-            for (let i = 0; i < list.length; ++i) {
-                let e = list[i]
-                menuModel.append({
-                    label:    e.label    || "",
-                    icon:     e.icon     || "",
-                    iconName: e.iconName || "",
-                    command:  e.command  || ""
-                })
-            }
-        }
-    }
+    ListModel { id: menuModel }
 
     Item {
         id: menuContainer
@@ -82,28 +208,28 @@ ApplicationWindow {
 
         Keys.onPressed: (event) => {
             if (event.key === Qt.Key_Escape) {
-                output.cancel()
+                root.handleEscape()
                 event.accepted = true
             }
         }
         Component.onCompleted: forceActiveFocus()
 
-        // ── Blender Radial Geometry ─────────────────────────────────────────
-        property real radiusDistance: Math.min(170, Math.min(root.width, root.height) * 0.22)
-        property real margin: radiusDistance + 100
+        // ── Geometry ────────────────────────────────────────────────────────────
+        property real radiusDistance: Math.min(185, Math.min(root.width, root.height) * 0.22)
+        property real margin:  radiusDistance + 110
         property real centerX: Math.max(margin, Math.min(width  - margin, root.menuX))
         property real centerY: Math.max(margin, Math.min(height - margin, root.menuY))
-        property int  itemCount: menuModel.count
+        property int  itemCount:    menuModel.count
         property int  hoveredIndex: -1
 
-        // ── Dim background ───────────────────────────────────────────────────
+        // ── Dim background ───────────────────────────────────────────────────────
         Rectangle {
             anchors.fill: parent
             color: "#000000"
-            opacity: 0.35
+            opacity: 0.38
         }
 
-        // ── Mouse tracking ────────────────────────────────────────────────────
+        // ── Mouse tracking ───────────────────────────────────────────────────────
         MouseArea {
             anchors.fill: parent
             hoverEnabled: true
@@ -113,8 +239,7 @@ ApplicationWindow {
                 let dy = mouse.y - menuContainer.centerY
                 let dist = Math.sqrt(dx*dx + dy*dy)
 
-                // Deadzone in the center (radius 18)
-                if (dist > 18) {
+                if (dist > 20) {
                     let angle = Math.atan2(dy, dx) + Math.PI / 2
                     if (angle < 0) angle += 2 * Math.PI
                     let sliceAngle = 360 / menuContainer.itemCount
@@ -127,51 +252,50 @@ ApplicationWindow {
             onClicked: {
                 if (menuContainer.hoveredIndex !== -1) {
                     let item = menuModel.get(menuContainer.hoveredIndex)
-                    output.select(item.label)
+                    if (item.submenuName !== "") {
+                        root.navigateTo(item.submenuName)
+                    } else {
+                        output.select(item.label)
+                    }
                 } else {
-                    output.cancel()
+                    root.goBack()
                 }
             }
         }
 
-        // ── Directional pointer line to hovered item (Blender style) ─────────
+        // ── Directional pointer line (Blender style) ────────────────────────────
         Shape {
             anchors.fill: parent
             visible: menuContainer.hoveredIndex !== -1
             layer.enabled: true
-            layer.samples: 4
+            layer.samples:  4
 
             ShapePath {
                 strokeWidth: 2
-                strokeColor: "#e67e22" // Blender signature orange accent
-                fillColor: "transparent"
+                strokeColor: "#e67e22"
+                fillColor:   "transparent"
 
-                PathMove {
-                    x: menuContainer.centerX
-                    y: menuContainer.centerY
-                }
+                PathMove { x: menuContainer.centerX; y: menuContainer.centerY }
                 PathLine {
                     x: {
                         if (menuContainer.hoveredIndex === -1) return menuContainer.centerX
-                        let sliceAngle = 360 / menuContainer.itemCount
-                        let midAngleRad = (menuContainer.hoveredIndex * sliceAngle - 90 + sliceAngle / 2) * Math.PI / 180
-                        return menuContainer.centerX + (menuContainer.radiusDistance - 20) * Math.cos(midAngleRad)
+                        let a = (menuContainer.hoveredIndex * 360 / menuContainer.itemCount - 90 + 180 / menuContainer.itemCount) * Math.PI / 180
+                        return menuContainer.centerX + (menuContainer.radiusDistance - 22) * Math.cos(a)
                     }
                     y: {
                         if (menuContainer.hoveredIndex === -1) return menuContainer.centerY
-                        let sliceAngle = 360 / menuContainer.itemCount
-                        let midAngleRad = (menuContainer.hoveredIndex * sliceAngle - 90 + sliceAngle / 2) * Math.PI / 180
-                        return menuContainer.centerY + (menuContainer.radiusDistance - 20) * Math.sin(midAngleRad)
+                        let a = (menuContainer.hoveredIndex * 360 / menuContainer.itemCount - 90 + 180 / menuContainer.itemCount) * Math.PI / 180
+                        return menuContainer.centerY + (menuContainer.radiusDistance - 22) * Math.sin(a)
                     }
                 }
             }
         }
 
-        // ── Subtle radial guide ring (Blender pie background) ────────────────
+        // ── Guide ring ──────────────────────────────────────────────────────────
         Rectangle {
-            x: menuContainer.centerX - width / 2
+            x: menuContainer.centerX - width  / 2
             y: menuContainer.centerY - height / 2
-            width: menuContainer.radiusDistance * 2
+            width:  menuContainer.radiusDistance * 2
             height: menuContainer.radiusDistance * 2
             radius: width / 2
             color: "transparent"
@@ -180,109 +304,153 @@ ApplicationWindow {
             opacity: 0.07
         }
 
-        // ── Radial Pie Buttons (Blender floating pill style) ───────────────────
+        // ── Pill delegates ──────────────────────────────────────────────────────
         Repeater {
             model: menuModel
             delegate: Item {
                 id: pillDelegate
 
+                required property int    index
+                required property string label
+                required property string icon
+                required property string iconName
+                required property string command
+                required property string submenuName
+
                 property bool   isHovered:   menuContainer.hoveredIndex === index
+                property bool   isSubmenu:   submenuName !== ""
+                property bool   hasXdgIcon:  iconName !== ""
+                property bool   hasEmoji:    icon !== ""
                 property real   sliceAngle:  360 / menuContainer.itemCount
                 property real   midAngleRad: (index * sliceAngle - 90 + sliceAngle / 2) * Math.PI / 180
-                property bool   hasXdgIcon:  model.iconName !== ""
-                property bool   hasEmoji:    model.icon !== ""
+                property real   targetX: menuContainer.centerX + menuContainer.radiusDistance * Math.cos(midAngleRad)
+                property real   targetY: menuContainer.centerY + menuContainer.radiusDistance * Math.sin(midAngleRad)
 
-                // Calculate center position along radial vector
-                property real targetX: menuContainer.centerX + menuContainer.radiusDistance * Math.cos(midAngleRad)
-                property real targetY: menuContainer.centerY + menuContainer.radiusDistance * Math.sin(midAngleRad)
-
-                x: targetX - width / 2
+                x: targetX - width  / 2
                 y: targetY - height / 2
-                width: pillRow.implicitWidth + 24
+                width:  pillRow.implicitWidth + 28
                 height: 42
 
                 Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
-                scale: isHovered ? 1.1 : 1.0
+                scale: isHovered ? 1.12 : 1.0
 
-                // Pill Container Box
+                // ── Pill box ──────────────────────────────────────────────────
                 Rectangle {
                     anchors.fill: parent
                     radius: height / 2
-                    color: pillDelegate.isHovered ? "#2b2b36" : "#1a1a20"
-                    border.color: pillDelegate.isHovered ? "#e67e22" : "#383842"
+                    color: pillDelegate.isHovered
+                        ? (pillDelegate.isSubmenu ? "#2a2438" : "#2b2b36")
+                        : (pillDelegate.isSubmenu ? "#18151f" : "#1a1a20")
+                    border.color: pillDelegate.isHovered
+                        ? (pillDelegate.isSubmenu ? "#a855f7" : "#e67e22")
+                        : (pillDelegate.isSubmenu ? "#4a3060" : "#383842")
                     border.width: pillDelegate.isHovered ? 2 : 1
 
-                    Behavior on color { ColorAnimation { duration: 100 } }
+                    Behavior on color        { ColorAnimation { duration: 100 } }
                     Behavior on border.color { ColorAnimation { duration: 100 } }
 
-                    // Horizontal layout for Blender pie menu button content
                     Row {
                         id: pillRow
                         anchors.centerIn: parent
-                        spacing: 8
+                        spacing: 7
 
-                        // XDG icon (system app icon from theme)
+                        // XDG system icon
                         Image {
                             visible: pillDelegate.hasXdgIcon
-                            width:  visible ? 22 : 0
-                            height: 22
-                            source: pillDelegate.hasXdgIcon ? "image://icon/" + model.iconName : ""
+                            width:   visible ? 22 : 0
+                            height:  22
+                            source:  pillDelegate.hasXdgIcon ? "image://icon/" + pillDelegate.iconName : ""
                             anchors.verticalCenter: parent.verticalCenter
                             smooth: true
                             mipmap: true
-                            opacity: pillDelegate.isHovered ? 1.0 : 0.75
+                            opacity: pillDelegate.isHovered ? 1.0 : 0.72
                             Behavior on opacity { NumberAnimation { duration: 100 } }
                         }
 
-                        // Emoji / text icon fallback
+                        // Emoji / letter fallback
                         Text {
                             visible: !pillDelegate.hasXdgIcon
-                            width:  visible ? implicitWidth : 0
-                            text: pillDelegate.hasEmoji
-                                  ? model.icon
-                                  : model.label.charAt(0).toUpperCase()
+                            width:   visible ? implicitWidth : 0
+                            text:    pillDelegate.hasEmoji
+                                     ? pillDelegate.icon
+                                     : (pillDelegate.isSubmenu ? "☰" : pillDelegate.label.charAt(0).toUpperCase())
                             font.pixelSize: pillDelegate.hasEmoji ? 17 : 13
-                            font.bold: !pillDelegate.hasEmoji
-                            color: pillDelegate.isHovered ? "#f39c12" : "#a0a0ab"
+                            font.bold:      !pillDelegate.hasEmoji
+                            color: pillDelegate.isHovered
+                                   ? (pillDelegate.isSubmenu ? "#c084fc" : "#f39c12")
+                                   : "#9090a0"
                             anchors.verticalCenter: parent.verticalCenter
                         }
 
+                        // Label
                         Text {
-                            text: model.label
+                            text:  pillDelegate.label
                             color: pillDelegate.isHovered ? "#ffffff" : "#d0d0d5"
-                            font.bold: pillDelegate.isHovered
+                            font.bold:      pillDelegate.isHovered
                             font.pixelSize: 13
                             anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        // ▶ Submenu chevron
+                        Text {
+                            visible: pillDelegate.isSubmenu
+                            text:    "▶"
+                            font.pixelSize: 9
+                            color: pillDelegate.isHovered ? "#c084fc" : "#5a4070"
+                            anchors.verticalCenter: parent.verticalCenter
+                            leftPadding: 1
+                            Behavior on color { ColorAnimation { duration: 100 } }
                         }
                     }
                 }
             }
         }
 
-        // ── Blender Center Pivot Dot/Ring ────────────────────────────────────
+        // ── Center pivot ─────────────────────────────────────────────────────────
         Rectangle {
-            x: menuContainer.centerX - width / 2
+            x: menuContainer.centerX - width  / 2
             y: menuContainer.centerY - height / 2
-            width: 26
-            height: 26
-            radius: 13
+            width:  30
+            height: 30
+            radius: 15
             color: "#18181c"
-            border.color: menuContainer.hoveredIndex !== -1 ? "#e67e22" : "#4a4a56"
+            border.color: menuContainer.hoveredIndex !== -1 ? "#e67e22"
+                          : (root.hasParent ? "#a855f7" : "#4a4a56")
             border.width: 2
 
             Behavior on border.color { ColorAnimation { duration: 120 } }
 
-            // Inner core indicator dot
+            // Back arrow when inside a submenu, dot otherwise
+            Text {
+                anchors.centerIn: parent
+                visible: root.hasParent && menuContainer.hoveredIndex === -1
+                text: "←"
+                font.pixelSize: 14
+                color: "#a855f7"
+            }
+
             Rectangle {
                 anchors.centerIn: parent
-                width: menuContainer.hoveredIndex !== -1 ? 10 : 6
+                visible: !(root.hasParent && menuContainer.hoveredIndex === -1)
+                width:  menuContainer.hoveredIndex !== -1 ? 12 : 7
                 height: width
                 radius: width / 2
-                color: menuContainer.hoveredIndex !== -1 ? "#e67e22" : "#808090"
+                color:  menuContainer.hoveredIndex !== -1 ? "#e67e22" : "#808090"
 
                 Behavior on width { NumberAnimation { duration: 100 } }
-                Behavior on color { ColorAnimation { duration: 100 } }
+                Behavior on color { ColorAnimation  { duration: 100 } }
             }
+        }
+
+        // ── Current menu breadcrumb label ────────────────────────────────────────
+        Text {
+            visible: root.menuStack.length > 0
+            x: menuContainer.centerX - width / 2
+            y: menuContainer.centerY + 22
+            text: root.menuStack.join(" › ")
+            color: "#606070"
+            font.pixelSize: 10
+            font.letterSpacing: 0.5
         }
     }
 }

@@ -1,5 +1,6 @@
 #include "config_loader.h"
 #include "desktop_entry.h"
+#include "cli_parser.h"
 
 #include <QDir>
 #include <QFile>
@@ -30,50 +31,106 @@ static QJsonObject loadRoot(const QString &configPath) {
     return doc.object();
 }
 
+static MenuItem itemFromJson(const QJsonObject &obj) {
+    MenuItem item;
+
+    if (obj.contains("app")) {
+        item = DesktopEntry::resolve(obj["app"].toString().trimmed());
+        if (obj.contains("label"))   item.label   = obj["label"].toString().trimmed();
+        if (obj.contains("command")) item.command = obj["command"].toString().trimmed();
+    } else if (obj.contains("submenu")) {
+        // Submenu navigation item
+        item.submenuName = obj["submenu"].toString().trimmed();
+        item.label       = obj.contains("label") ? obj["label"].toString().trimmed()
+                                                  : item.submenuName;
+        item.icon        = obj["icon"].toString().trimmed();
+        item.iconName    = obj["iconName"].toString().trimmed();
+    } else {
+        item.label    = obj["label"].toString().trimmed();
+        item.icon     = obj["icon"].toString().trimmed();
+        item.iconName = obj["iconName"].toString().trimmed();
+        item.command  = obj["command"].toString().trimmed();
+    }
+
+    return item;
+}
+
 QList<MenuItem> ConfigLoader::loadMenu(const QString &menuName, const QString &configPath) {
     QJsonObject root = loadRoot(configPath);
     if (root.isEmpty()) return {};
 
     QJsonObject menus = root["menus"].toObject();
     if (!menus.contains(menuName)) {
-        QTextStream(stderr) << "drmenu: menu '" << menuName << "' not found in config.\n"
-                            << "Available menus: " << menus.keys().join(", ") << "\n";
+        QTextStream(stderr) << "drmenu: menu '" << menuName << "' not found.\n"
+                            << "Available: " << menus.keys().join(", ") << "\n";
         return {};
     }
 
-    QJsonObject menu = menus[menuName].toObject();
-    QJsonArray itemsArray = menu["items"].toArray();
-
+    QJsonArray itemsArray = menus[menuName].toObject()["items"].toArray();
     QList<MenuItem> items;
     for (const QJsonValue &v : itemsArray) {
-        QJsonObject obj = v.toObject();
-        MenuItem item;
-
-        if (obj.contains("app")) {
-            // Resolve from XDG .desktop file
-            item = DesktopEntry::resolve(obj["app"].toString().trimmed());
-            // Allow overriding resolved values
-            if (obj.contains("label"))   item.label   = obj["label"].toString().trimmed();
-            if (obj.contains("command")) item.command = obj["command"].toString().trimmed();
-        } else {
-            item.label    = obj["label"].toString().trimmed();
-            item.icon     = obj["icon"].toString().trimmed();
-            item.iconName = obj["iconName"].toString().trimmed();
-            item.command  = obj["command"].toString().trimmed();
-        }
-
+        MenuItem item = itemFromJson(v.toObject());
         if (!item.label.isEmpty())
             items.append(item);
     }
-
-    if (items.isEmpty())
-        QTextStream(stderr) << "drmenu: menu '" << menuName << "' has no items.\n";
-
     return items;
+}
+
+QVariantMap ConfigLoader::loadAllMenus(const QString &configPath) {
+    QJsonObject root = loadRoot(configPath);
+    if (root.isEmpty()) return {};
+
+    bool globalSpawnAtMouse    = root.contains("spawnAtMouse")    ? root["spawnAtMouse"].toBool(true)    : true;
+    bool globalEscapeClosesAll = root.contains("escapeClosesAll") ? root["escapeClosesAll"].toBool(false) : false;
+
+    QJsonObject menusJson = root["menus"].toObject();
+    QVariantMap result;
+
+    for (const QString &menuName : menusJson.keys()) {
+        QJsonObject menuObj = menusJson[menuName].toObject();
+        QJsonArray itemsArray = menuObj["items"].toArray();
+
+        QVariantList itemList;
+        for (const QJsonValue &v : itemsArray) {
+            MenuItem item = itemFromJson(v.toObject());
+            if (!item.label.isEmpty())
+                itemList.append(item.toVariantMap());
+        }
+
+        bool spawnAtMouse    = menuObj.contains("spawnAtMouse")    ? menuObj["spawnAtMouse"].toBool(true)    : globalSpawnAtMouse;
+        bool escapeClosesAll = menuObj.contains("escapeClosesAll") ? menuObj["escapeClosesAll"].toBool(false) : globalEscapeClosesAll;
+
+        QVariantMap menuData;
+        menuData["items"]           = itemList;
+        menuData["spawnAtMouse"]    = spawnAtMouse;
+        menuData["escapeClosesAll"] = escapeClosesAll;
+
+        result[menuName] = menuData;
+    }
+
+    return result;
 }
 
 QStringList ConfigLoader::availableMenus(const QString &configPath) {
     QJsonObject root = loadRoot(configPath);
     if (root.isEmpty()) return {};
     return root["menus"].toObject().keys();
+}
+
+ConfigLoader::MenuOptions ConfigLoader::loadMenuOptions(const QString &menuName,
+                                                         const QString &configPath) {
+    MenuOptions opts;
+    QJsonObject root = loadRoot(configPath);
+    if (root.isEmpty()) return opts;
+
+    // Global defaults
+    if (root.contains("spawnAtMouse"))    opts.spawnAtMouse    = root["spawnAtMouse"].toBool(true);
+    if (root.contains("escapeClosesAll")) opts.escapeClosesAll = root["escapeClosesAll"].toBool(false);
+
+    // Per-menu overrides
+    QJsonObject menuObj = root["menus"].toObject()[menuName].toObject();
+    if (menuObj.contains("spawnAtMouse"))    opts.spawnAtMouse    = menuObj["spawnAtMouse"].toBool(true);
+    if (menuObj.contains("escapeClosesAll")) opts.escapeClosesAll = menuObj["escapeClosesAll"].toBool(false);
+
+    return opts;
 }

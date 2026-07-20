@@ -9,47 +9,101 @@
 #include <QJsonArray>
 #include <chrono>
 
+// ── Shared response handler ────────────────────────────────────────────────────
+// Builds a flat label→command map from all menus so commands run on selection.
+static QMap<QString, QString> buildCommandMap(const QVariantMap &allMenus) {
+    QMap<QString, QString> map;
+    for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
+        QVariant val = it.value();
+        QVariantList itemList = (val.typeId() == QMetaType::QVariantMap)
+            ? val.toMap()["items"].toList()
+            : val.toList();
+
+        for (const QVariant &v : itemList) {
+            QVariantMap item = v.toMap();
+            QString label   = item["label"].toString();
+            QString command = item["command"].toString();
+            if (!label.isEmpty() && !command.isEmpty())
+                map[label] = command;
+        }
+    }
+    return map;
+}
+
+static void waitForResponse(QLocalSocket &socket,
+                             const QMap<QString, QString> &commandMap,
+                             std::chrono::high_resolution_clock::time_point t_start) {
+    if (!socket.waitForReadyRead(30000)) return;
+
+    QByteArray response = socket.readAll().trimmed();
+    QString respStr = QString::fromUtf8(response);
+
+    auto t_end = std::chrono::high_resolution_clock::now();
+    double ms  = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+
+    if (respStr.startsWith("SELECTED\t")) {
+        QString selected = respStr.mid(9);
+        QTextStream(stdout) << selected << "\n";
+
+        auto it = commandMap.find(selected);
+        if (it != commandMap.end())
+            QProcess::startDetached("sh", {"-c", it.value()});
+
+        QTextStream(stderr) << "[drmenu client latency: "
+                            << QString::number(ms, 'f', 2) << " ms]\n";
+    }
+}
+
+// ── Flat item list (inline / stdin mode) ──────────────────────────────────────
 bool ClientRunner::tryRun(const QList<MenuItem> &items) {
     QLocalSocket socket;
     socket.connectToServer(DaemonServer::SOCKET_NAME);
-    if (!socket.waitForConnected(50))
-        return false;
+    if (!socket.waitForConnected(50)) return false;
 
-    auto t_client_start = std::chrono::high_resolution_clock::now();
+    auto t_start = std::chrono::high_resolution_clock::now();
 
-    // Serialize items as a JSON array, terminated by newline
     QJsonArray arr;
     for (const MenuItem &item : items)
         arr.append(QJsonObject::fromVariantMap(item.toVariantMap()));
 
-    socket.write(QJsonDocument(arr).toJson(QJsonDocument::Compact) + "\n");
+    QJsonObject payload;
+    payload["type"]  = "items";
+    payload["items"] = arr;
+    socket.write(QJsonDocument(payload).toJson(QJsonDocument::Compact) + "\n");
     socket.flush();
 
-    if (socket.waitForReadyRead(30000)) {
-        QByteArray response = socket.readAll().trimmed();
-        QString respStr = QString::fromUtf8(response);
+    // Build command map from flat items list
+    QMap<QString, QString> cmdMap;
+    for (const MenuItem &item : items)
+        if (!item.label.isEmpty() && !item.command.isEmpty())
+            cmdMap[item.label] = item.command;
 
-        auto t_client_end = std::chrono::high_resolution_clock::now();
-        double ms_client = std::chrono::duration<double, std::milli>(t_client_end - t_client_start).count();
+    waitForResponse(socket, cmdMap, t_start);
+    return true;
+}
 
-        if (respStr.startsWith("SELECTED\t")) {
-            QString selected = respStr.mid(9);
+// ── Full menu map (config / nested mode) ──────────────────────────────────────
+bool ClientRunner::tryRunMenus(const QVariantMap &allMenus, const QString &initialMenu,
+                                bool spawnAtMouse, bool escapeClosesAll) {
+    QLocalSocket socket;
+    socket.connectToServer(DaemonServer::SOCKET_NAME);
+    if (!socket.waitForConnected(50)) return false;
 
-            // Print to stdout (dmenu compatible)
-            QTextStream(stdout) << selected << "\n";
+    auto t_start = std::chrono::high_resolution_clock::now();
 
-            // Run the associated command if defined
-            for (const MenuItem &item : items) {
-                if (item.label == selected && !item.command.isEmpty()) {
-                    QProcess::startDetached("sh", {"-c", item.command});
-                    break;
-                }
-            }
+    QJsonObject menusJson;
+    for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it)
+        menusJson[it.key()] = QJsonArray::fromVariantList(it.value().toList());
 
-            QTextStream(stderr) << "[drmenu daemon client latency: "
-                                << QString::number(ms_client, 'f', 2) << " ms]\n";
-        }
-    }
+    QJsonObject payload;
+    payload["type"]           = "menus";
+    payload["menus"]          = menusJson;
+    payload["initialMenu"]    = initialMenu;
+    payload["spawnAtMouse"]   = spawnAtMouse;
+    payload["escapeClosesAll"] = escapeClosesAll;
+    socket.write(QJsonDocument(payload).toJson(QJsonDocument::Compact) + "\n");
+    socket.flush();
 
+    waitForResponse(socket, buildCommandMap(allMenus), t_start);
     return true;
 }

@@ -2,74 +2,94 @@
 #include <QProcess>
 #include <QByteArray>
 #include <QStringList>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QCursor>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QDebug>
 
 TargetScreenInfo ScreenDetector::getTargetScreenInfo() {
     TargetScreenInfo info;
-    if (qgetenv("HYPRLAND_INSTANCE_SIGNATURE").isEmpty())
-        return info;
 
+    int cx = -1, cy = -1;
+
+    // 1. Try hyprctl cursorpos
     QProcess cursorProc;
     cursorProc.start("hyprctl", {"cursorpos"});
-    cursorProc.waitForFinished(2000);
-    if (cursorProc.exitCode() != 0) return info;
+    if (cursorProc.waitForFinished(1000) && cursorProc.exitCode() == 0) {
+        QString cursorOut = QString::fromUtf8(cursorProc.readAllStandardOutput()).trimmed();
+        QStringList parts = cursorOut.split(',');
+        if (parts.size() >= 2) {
+            bool okX = false, okY = false;
+            int x = parts[0].trimmed().toInt(&okX);
+            int y = parts[1].trimmed().toInt(&okY);
+            if (okX && okY) {
+                cx = x;
+                cy = y;
+            }
+        }
+    }
 
-    QString cursorOut = QString::fromUtf8(cursorProc.readAllStandardOutput()).trimmed();
-    QStringList parts = cursorOut.split(',');
-    if (parts.size() < 2) return info;
-    bool okX, okY;
-    int cx = parts[0].trimmed().toInt(&okX);
-    int cy = parts[1].trimmed().toInt(&okY);
-    if (!okX || !okY) return info;
+    // Fallback: QCursor::pos()
+    if (cx < 0 || cy < 0) {
+        QPoint gpos = QCursor::pos();
+        cx = gpos.x();
+        cy = gpos.y();
+    }
 
+    // 2. Try hyprctl monitors -j
     QProcess monitorsProc;
     monitorsProc.start("hyprctl", {"monitors", "-j"});
-    monitorsProc.waitForFinished(2000);
-    if (monitorsProc.exitCode() != 0) return info;
+    if (monitorsProc.waitForFinished(1000) && monitorsProc.exitCode() == 0) {
+        QByteArray jsonBytes = monitorsProc.readAllStandardOutput();
+        QJsonParseError jsonErr;
+        QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &jsonErr);
+        if (jsonErr.error == QJsonParseError::NoError && doc.isArray()) {
+            QJsonArray monitorList = doc.array();
+            for (const QJsonValue &val : monitorList) {
+                if (!val.isObject()) continue;
+                QJsonObject mon = val.toObject();
 
-    QString json = QString::fromUtf8(monitorsProc.readAllStandardOutput());
+                QString name = mon["name"].toString();
+                int mx = mon["x"].toInt();
+                int my = mon["y"].toInt();
+                int mw = mon["width"].toInt();
+                int mh = mon["height"].toInt();
 
-    auto extractInt = [](const QString &block, const QString &key) -> int {
-        QString searchKey = "\"" + key + "\": ";
-        int idx = block.indexOf(searchKey);
-        if (idx < 0) return -1;
-        int start = idx + searchKey.length();
-        int end = start;
-        while (end < block.size() && (block[end].isDigit() || block[end] == '-')) ++end;
-        return block.mid(start, end - start).toInt();
-    };
-    auto extractStr = [](const QString &block, const QString &key) -> QString {
-        QString searchKey = "\"" + key + "\": \"";
-        int idx = block.indexOf(searchKey);
-        if (idx < 0) return {};
-        int start = idx + searchKey.length();
-        int end = block.indexOf('"', start);
-        return end > start ? block.mid(start, end - start) : QString();
-    };
+                if (!name.isEmpty() && mw > 0 && mh > 0) {
+                    if (cx >= mx && cx < mx + mw && cy >= my && cy < my + mh) {
+                        info.monitorName = name;
+                        info.localX = cx - mx;
+                        info.localY = cy - my;
+                        return info;
+                    }
+                }
+            }
 
-    int pos = 0;
-    while (pos < json.size()) {
-        int blockStart = json.indexOf('{', pos);
-        if (blockStart < 0) break;
-        int depth = 0, blockEnd = blockStart;
-        for (int i = blockStart; i < json.size(); ++i) {
-            if (json[i] == '{') ++depth;
-            else if (json[i] == '}') { --depth; if (depth == 0) { blockEnd = i; break; } }
-        }
-        QString block = json.mid(blockStart, blockEnd - blockStart + 1);
-        QString name = extractStr(block, "name");
-        int mx = extractInt(block, "x");
-        int my = extractInt(block, "y");
-        int mw = extractInt(block, "width");
-        int mh = extractInt(block, "height");
-        if (!name.isEmpty() && mw > 0 && mh > 0) {
-            if (cx >= mx && cx < mx + mw && cy >= my && cy < my + mh) {
-                info.monitorName = name;
+            // If cursor wasn't inside explicit bounds, pick the first monitor
+            if (!monitorList.isEmpty() && monitorList[0].isObject()) {
+                QJsonObject mon = monitorList[0].toObject();
+                info.monitorName = mon["name"].toString();
+                int mx = mon["x"].toInt();
+                int my = mon["y"].toInt();
                 info.localX = cx - mx;
                 info.localY = cy - my;
                 return info;
             }
         }
-        pos = blockEnd + 1;
     }
+
+    // 3. Fallback using QGuiApplication screens
+    QPoint gpos(cx, cy);
+    QScreen *targetScreen = QGuiApplication::screenAt(gpos);
+    if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
+    if (targetScreen) {
+        info.monitorName = targetScreen->name();
+        info.localX = cx - targetScreen->geometry().x();
+        info.localY = cy - targetScreen->geometry().y();
+    }
+
     return info;
 }
