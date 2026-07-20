@@ -73,9 +73,6 @@ ApplicationWindow {
     property var  menuStack:    []     // stack of menu names (strings)
     property bool hasParent:    false  // true when not at root
 
-    // If spawnAtMouse is true -> move to mouse position
-    // If spawnAtMouse is false & isInitial -> center on screen
-    // If spawnAtMouse is false & NOT initial -> KEEP former menu's exact position!
     function updatePositionForMenu(menuData, isInitial) {
         let spawnAtMouse = (menuData && menuData.spawnAtMouse !== undefined)
             ? menuData.spawnAtMouse
@@ -91,8 +88,6 @@ ApplicationWindow {
             root.menuX = root.width / 2
             root.menuY = root.height / 2
         }
-        // Note: when spawnAtMouse is false and isInitial is false,
-        // root.menuX and root.menuY remain unchanged (exact former menu position).
     }
 
     function navigateTo(menuName) {
@@ -230,7 +225,7 @@ ApplicationWindow {
     // ── Keyboard Shortcuts ─────────────────────────────────────────────────────
     Shortcut { sequence: "Escape"; onActivated: root.handleEscape() }
 
-    // ── Fast, crisp opening animation (30ms) ───────────────────────────────────
+    // ── Opening animation (35ms) ──────────────────────────────────────────────
     ParallelAnimation {
         id: openAnimation
         NumberAnimation { target: menuContainer; property: "scale";   from: 0.92; to: 1.0; duration: 35; easing.type: Easing.OutQuad }
@@ -255,7 +250,7 @@ ApplicationWindow {
         Component.onCompleted: forceActiveFocus()
 
         // ── Geometry ────────────────────────────────────────────────────────────
-        property real radiusDistance: root.isPieMode ? (root.s.outerRadius || 165) : (root.s.radiusDistance || 185)
+        property real radiusDistance: root.isPieMode ? (root.s.outerRadius || 230) : (root.s.radiusDistance || 185)
         property real margin:  radiusDistance + 110
         property real centerX: Math.max(margin, Math.min(width  - margin, root.menuX))
         property real centerY: Math.max(margin, Math.min(height - margin, root.menuY))
@@ -280,7 +275,7 @@ ApplicationWindow {
                 let dy = mouse.y - menuContainer.centerY
                 let dist = Math.sqrt(dx*dx + dy*dy)
 
-                let minRadius = root.isPieMode ? (root.s.innerRadius || 50) : 20
+                let minRadius = root.isPieMode ? (root.s.innerRadius || 65) : 20
 
                 if (dist > minRadius) {
                     let mouseAngle = Math.atan2(dy, dx)
@@ -375,374 +370,33 @@ ApplicationWindow {
             width:  (root.s.outerRadius || 230) * 2
             height: width
             radius: width / 2
-            color:  root.s.pieBackgroundColor || "#121218"
+            color:  root.s.pieBackgroundColor || "#14141d"
             opacity: root.s.pieBackgroundOpacity !== undefined ? root.s.pieBackgroundOpacity : 0.95
         }
 
-        // ── MODE 1: Segmented Pie Wheel Sectors (Clear Dividers) ───────────────
+        // ── MODE 1: Segmented Pie Wheel Sectors ────────────────────────────────
         Repeater {
             model: menuModel
-            delegate: Item {
-                id: pieSectorDelegate
-                visible: root.isPieMode
-                z: isHovered ? 2 : 0
-
-                required property int    index
-                required property string label
-                required property string icon
-                required property string iconName
-                required property string command
-                required property string submenuName
-
-                property bool isHovered: menuContainer.hoveredIndex === index
-                property bool isSubmenu: submenuName !== ""
-                property bool hasXdgIcon: iconName !== ""
-                property bool hasEmoji:   icon !== ""
-
-                property real innerR: root.s.innerRadius || 65
-                property real outerR: isHovered ? ((root.s.outerRadius || 230) + 12) : (root.s.outerRadius || 230)
-
-                property real count: menuContainer.itemCount
-                property real sliceAngleDeg: 360 / count
-
-                property real startDeg: index * sliceAngleDeg - 90
-                property real endDeg:   (index + 1) * sliceAngleDeg - 90
-
-                property real startRad: startDeg * Math.PI / 180
-                property real endRad:   endDeg   * Math.PI / 180
-                property real midRad:   (startDeg + sliceAngleDeg / 2) * Math.PI / 180
-
-                property real contentRadius: (innerR + (root.s.outerRadius || 230)) / 2
-                property real contentX: menuContainer.centerX + contentRadius * Math.cos(midRad)
-                property real contentY: menuContainer.centerY + contentRadius * Math.sin(midRad)
-
-                property string wedgeSvgPath: {
-                    let x0 = menuContainer.centerX + innerR * Math.cos(startRad)
-                    let y0 = menuContainer.centerY + innerR * Math.sin(startRad)
-                    let x1 = menuContainer.centerX + outerR * Math.cos(startRad)
-                    let y1 = menuContainer.centerY + outerR * Math.sin(startRad)
-                    let x2 = menuContainer.centerX + outerR * Math.cos(endRad)
-                    let y2 = menuContainer.centerY + outerR * Math.sin(endRad)
-                    let x3 = menuContainer.centerX + innerR * Math.cos(endRad)
-                    let y3 = menuContainer.centerY + innerR * Math.sin(endRad)
-                    let largeArc = sliceAngleDeg > 180 ? 1 : 0
-
-                    return "M " + x0.toFixed(2) + " " + y0.toFixed(2) +
-                           " L " + x1.toFixed(2) + " " + y1.toFixed(2) +
-                           " A " + outerR.toFixed(2) + " " + outerR.toFixed(2) + " 0 " + largeArc + " 1 " + x2.toFixed(2) + " " + y2.toFixed(2) +
-                           " L " + x3.toFixed(2) + " " + y3.toFixed(2) +
-                           " A " + innerR.toFixed(2) + " " + innerR.toFixed(2) + " 0 " + largeArc + " 0 " + x0.toFixed(2) + " " + y0.toFixed(2) +
-                           " Z"
-                }
-
-                Shape {
-                    width: menuContainer.width
-                    height: menuContainer.height
-
-                    ShapePath {
-                        strokeWidth: pieSectorDelegate.isHovered ? 3 : (root.s.delimiterWidth !== undefined ? root.s.delimiterWidth : 2)
-                        strokeColor: pieSectorDelegate.isHovered
-                            ? (root.s.accentColor || "#e67e22")
-                            : (root.s.delimiterColor || "#383848")
-
-                        fillColor: pieSectorDelegate.isHovered
-                            ? (root.s.pieSliceHoverColor || "#323246")
-                            : (root.s.pieSliceColor || "#1e1e2a")
-
-                        Behavior on fillColor { ColorAnimation { duration: 40 } }
-
-                        PathSvg {
-                            path: pieSectorDelegate.wedgeSvgPath
-                        }
-                    }
-                }
-
-                // Sector Content (Icon + Label centered in wedge)
-                Item {
-                    x: pieSectorDelegate.contentX - width / 2
-                    y: pieSectorDelegate.contentY - height / 2
-                    width: pieRow.implicitWidth
-                    height: pieRow.implicitHeight
-
-                    scale: pieSectorDelegate.isHovered ? 1.12 : 1.0
-                    Behavior on scale { NumberAnimation { duration: 40 } }
-
-                    Row {
-                        id: pieRow
-                        spacing: 6
-                        anchors.centerIn: parent
-
-                        Image {
-                            visible: pieSectorDelegate.hasXdgIcon
-                            width:   visible ? (root.s.iconSize || 20) : 0
-                            height:  root.s.iconSize || 20
-                            source:  pieSectorDelegate.hasXdgIcon ? "image://icon/" + pieSectorDelegate.iconName : ""
-                            anchors.verticalCenter: parent.verticalCenter
-                            smooth: true; mipmap: true
-                        }
-
-                        Text {
-                            visible: !pieSectorDelegate.hasXdgIcon
-                            text:    pieSectorDelegate.hasEmoji
-                                     ? pieSectorDelegate.icon
-                                     : (pieSectorDelegate.isSubmenu ? "☰" : pieSectorDelegate.label.charAt(0).toUpperCase())
-                            font.family:    root.s.fontFamily || "Sans"
-                            font.pixelSize: (root.s.fontSize || 13)
-                            color: pieSectorDelegate.isHovered
-                                   ? (pieSectorDelegate.isSubmenu ? (root.s.submenuAccent || "#c084fc") : (root.s.iconHoverColor || "#f39c12"))
-                                   : (root.s.iconColor || "#a0a0b0")
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        Text {
-                            text: pieSectorDelegate.label
-                            font.family: root.s.fontFamily || "Sans"
-                            font.pixelSize: root.s.fontSize || 13
-                            font.bold: pieSectorDelegate.isHovered
-                            color: pieSectorDelegate.isHovered ? (root.s.textHoverColor || "#ffffff") : (root.s.textColor || "#d0d0d8")
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        Text {
-                            visible: pieSectorDelegate.isSubmenu
-                            text: "▶"
-                            font.pixelSize: 9
-                            color: pieSectorDelegate.isHovered ? (root.s.submenuAccent || "#c084fc") : "#605075"
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-                }
-            }
+            delegate: PieSectorDelegate {}
         }
 
-        // ── Pie Delimiters Overlay (Inner Ring, Outer Ring & Radial Spokes) ─────────
-        Item {
-            id: pieDelimitersOverlay
-            visible: root.isPieMode
-            z: 1
-            anchors.fill: parent
+        // ── Pie Delimiters Overlay ──────────────────────────────────────────────
+        PieDelimitersOverlay {}
 
-            property real innerR: root.s.innerRadius || 65
-            property real outerR: root.s.outerRadius || 230
-            property int  dWidth: root.s.delimiterWidth !== undefined ? root.s.delimiterWidth : 3
-            property color dColor: root.s.delimiterColor || "#48485a"
-
-            // Inner Ring Delimiter (Ring between center hole and pie slices)
-            Rectangle {
-                x: menuContainer.centerX - pieDelimitersOverlay.innerR
-                y: menuContainer.centerY - pieDelimitersOverlay.innerR
-                width:  pieDelimitersOverlay.innerR * 2
-                height: pieDelimitersOverlay.innerR * 2
-                radius: pieDelimitersOverlay.innerR
-                color: "transparent"
-                border.color: pieDelimitersOverlay.dColor
-                border.width: pieDelimitersOverlay.dWidth
-            }
-
-            // Outer Ring Delimiter (Ring around outer boundary of pie wheel)
-            Rectangle {
-                x: menuContainer.centerX - pieDelimitersOverlay.outerR
-                y: menuContainer.centerY - pieDelimitersOverlay.outerR
-                width:  pieDelimitersOverlay.outerR * 2
-                height: pieDelimitersOverlay.outerR * 2
-                radius: pieDelimitersOverlay.outerR
-                color: "transparent"
-                border.color: root.s.pieOuterBorderColor || pieDelimitersOverlay.dColor
-                border.width: root.s.pieOuterBorderWidth !== undefined ? root.s.pieOuterBorderWidth : pieDelimitersOverlay.dWidth
-            }
-
-            // Radial Spokes Delimiters (Divider lines running from inner to outer circle)
-            Repeater {
-                model: menuContainer.itemCount
-                delegate: Shape {
-                    anchors.fill: parent
-                    layer.enabled: true
-                    layer.samples: 4
-
-                    property real count: menuContainer.itemCount
-                    property real sliceAngleDeg: 360 / count
-                    property real startDeg: index * sliceAngleDeg - 90
-                    property real startRad: startDeg * Math.PI / 180
-
-                    ShapePath {
-                        strokeWidth: pieDelimitersOverlay.dWidth
-                        strokeColor: pieDelimitersOverlay.dColor
-                        fillColor: "transparent"
-
-                        PathMove {
-                            x: menuContainer.centerX + pieDelimitersOverlay.innerR * Math.cos(startRad)
-                            y: menuContainer.centerY + pieDelimitersOverlay.innerR * Math.sin(startRad)
-                        }
-                        PathLine {
-                            x: menuContainer.centerX + pieDelimitersOverlay.outerR * Math.cos(startRad)
-                            y: menuContainer.centerY + pieDelimitersOverlay.outerR * Math.sin(startRad)
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── MODE 2: Floating Pill / Polygon Delegates ─────────────────────────
+        // ── MODE 2: Floating Pill / Polygon Delegates ──────────────────────────
         Repeater {
             model: menuModel
-            delegate: Item {
-                id: pillDelegate
-                visible: !root.isPieMode
-
-                required property int    index
-                required property string label
-                required property string icon
-                required property string iconName
-                required property string command
-                required property string submenuName
-
-                property bool   isHovered:   menuContainer.hoveredIndex === index
-                property bool   isSubmenu:   submenuName !== ""
-                property bool   hasXdgIcon:  iconName !== ""
-                property bool   hasEmoji:    icon !== ""
-                property string shapeType:   root.s.shape || "pill"
-
-                property real   midAngleRad: root.getItemAngleRad(index, menuContainer.itemCount)
-                property real   targetX: menuContainer.centerX + menuContainer.radiusDistance * Math.cos(midAngleRad)
-                property real   targetY: menuContainer.centerY + menuContainer.radiusDistance * Math.sin(midAngleRad)
-
-                x: targetX - width  / 2
-                y: targetY - height / 2
-
-                width:  shapeType === "circle" ? height : (pillRow.implicitWidth + 28)
-                height: shapeType === "circle" ? (root.s.pillHeight || 48) : (root.s.pillHeight || 42)
-
-                Behavior on scale { NumberAnimation { duration: 50; easing.type: Easing.OutQuad } }
-                scale: isHovered ? 1.10 : 1.0
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: {
-                        if (pillDelegate.shapeType === "circle") return height / 2
-                        if (pillDelegate.shapeType === "rectangle") return 0
-                        if (pillDelegate.shapeType === "rounded") return 8
-                        return root.s.pillRadius !== undefined ? root.s.pillRadius : height / 2
-                    }
-
-                    color: pillDelegate.isHovered
-                        ? (pillDelegate.isSubmenu ? (root.s.pillSubmenuHoverColor || "#2a2438") : (root.s.pillHoverColor || "#2b2b36"))
-                        : (pillDelegate.isSubmenu ? (root.s.pillSubmenuColor || "#18151f") : (root.s.pillColor || "#1a1a20"))
-
-                    border.color: pillDelegate.isHovered
-                        ? (pillDelegate.isSubmenu ? (root.s.pillSubmenuBorderHover || "#a855f7") : (root.s.pillBorderHoverColor || "#e67e22"))
-                        : (pillDelegate.isSubmenu ? (root.s.pillSubmenuBorder || "#4a3060") : (root.s.pillBorderColor || "#383842"))
-
-                    border.width: pillDelegate.isHovered
-                        ? (root.s.borderHoverWidth || 2)
-                        : (root.s.borderWidth || 1)
-
-                    Behavior on color        { ColorAnimation { duration: 40 } }
-                    Behavior on border.color { ColorAnimation { duration: 40 } }
-
-                    Row {
-                        id: pillRow
-                        anchors.centerIn: parent
-                        spacing: 7
-
-                        Image {
-                            visible: pillDelegate.hasXdgIcon
-                            width:   visible ? (root.s.iconSize || 22) : 0
-                            height:  root.s.iconSize || 22
-                            source:  pillDelegate.hasXdgIcon ? "image://icon/" + pillDelegate.iconName : ""
-                            anchors.verticalCenter: parent.verticalCenter
-                            smooth: true; mipmap: true
-                            opacity: pillDelegate.isHovered ? 1.0 : 0.75
-                            Behavior on opacity { NumberAnimation { duration: 40 } }
-                        }
-
-                        Text {
-                            visible: !pillDelegate.hasXdgIcon
-                            text:    pillDelegate.hasEmoji
-                                     ? pillDelegate.icon
-                                     : (pillDelegate.isSubmenu ? "☰" : pillDelegate.label.charAt(0).toUpperCase())
-                            font.family:    root.s.fontFamily || "Sans"
-                            font.pixelSize: pillDelegate.hasEmoji ? ((root.s.fontSize || 13) + 4) : (root.s.fontSize || 13)
-                            font.bold:      !pillDelegate.hasEmoji
-                            color: pillDelegate.isHovered
-                                   ? (pillDelegate.isSubmenu ? (root.s.submenuAccent || "#c084fc") : (root.s.iconHoverColor || "#f39c12"))
-                                   : (root.s.iconColor || "#9090a0")
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        Text {
-                            visible: pillDelegate.shapeType !== "circle" || pillDelegate.isHovered
-                            text:        pillDelegate.label
-                            font.family: root.s.fontFamily || "Sans"
-                            font.pixelSize: root.s.fontSize || 13
-                            font.bold:   pillDelegate.isHovered
-                            color:       pillDelegate.isHovered
-                                         ? (root.s.textHoverColor || "#ffffff")
-                                         : (root.s.textColor || "#d0d0d5")
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        Text {
-                            visible: pillDelegate.isSubmenu && pillDelegate.shapeType !== "circle"
-                            text:    "▶"
-                            font.pixelSize: Math.max(8, (root.s.fontSize || 13) - 4)
-                            color: pillDelegate.isHovered
-                                   ? (root.s.submenuAccent || "#c084fc")
-                                   : (root.s.pillSubmenuBorder || "#5a4070")
-                            anchors.verticalCenter: parent.verticalCenter
-                            leftPadding: 1
-                            Behavior on color { ColorAnimation { duration: 40 } }
-                        }
-                    }
-                }
-            }
+            delegate: PillDelegate {}
         }
 
-        // ── Center pivot ─────────────────────────────────────────────────────────
-        Rectangle {
-            x: menuContainer.centerX - width  / 2
-            y: menuContainer.centerY - height / 2
-            width:  root.isPieMode ? ((root.s.innerRadius || 65) * 2) : ((root.s.centerRadius || 15) * 2)
-            height: width
-            radius: width / 2
-            color:  root.s.centerColor || "#111116"
-            border.color: menuContainer.hoveredIndex !== -1
-                ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || "#e67e22")
-                : (root.hasParent
-                    ? (root.s.submenuAccent || "#c084fc")
-                    : (root.s.centerBorderColor || root.s.centerBorder || "#48485a"))
-            border.width: root.s.centerBorderWidth !== undefined ? root.s.centerBorderWidth : 3
-
-            Behavior on border.color { ColorAnimation { duration: 50 } }
-
-            Text {
-                anchors.centerIn: parent
-                visible: root.hasParent && menuContainer.hoveredIndex === -1
-                text: "←"
-                font.family: root.s.fontFamily || "Sans"
-                font.pixelSize: (root.s.fontSize || 13) + 2
-                color: root.s.submenuAccent || "#a855f7"
-            }
-
-            Rectangle {
-                anchors.centerIn: parent
-                visible: !(root.hasParent && menuContainer.hoveredIndex === -1)
-                width:  menuContainer.hoveredIndex !== -1 ? 12 : 7
-                height: width
-                radius: width / 2
-                color:  menuContainer.hoveredIndex !== -1
-                        ? (root.s.centerDotHoverColor || "#e67e22")
-                        : (root.s.centerDotColor || "#808090")
-
-                Behavior on width { NumberAnimation { duration: 40 } }
-                Behavior on color { ColorAnimation  { duration: 40 } }
-            }
-        }
+        // ── Center pivot ───────────────────────────────────────────────────────
+        CenterPivot {}
 
         // ── Current menu breadcrumb label ────────────────────────────────────────
         Text {
             visible: (root.s.showBreadcrumbs !== false) && root.menuStack.length > 0
             x: menuContainer.centerX - width / 2
-            y: menuContainer.centerY + (root.isPieMode ? (root.s.innerRadius || 50) : (root.s.centerRadius || 15)) + 10
+            y: menuContainer.centerY + (root.isPieMode ? (root.s.innerRadius || 65) : (root.s.centerRadius || 15)) + 10
             text: root.menuStack.join(" › ")
             font.family: root.s.fontFamily || "Sans"
             font.pixelSize: Math.max(9, (root.s.fontSize || 13) - 3)

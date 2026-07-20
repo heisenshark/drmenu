@@ -44,6 +44,10 @@ qt_add_qml_module(drmenu
     VERSION 1.0
     QML_FILES
         src/qml/main.qml
+        src/qml/PieSectorDelegate.qml
+        src/qml/PieDelimitersOverlay.qml
+        src/qml/PillDelegate.qml
+        src/qml/CenterPivot.qml
 )
 
 # Link Qt6 libraries and LayerShellQt
