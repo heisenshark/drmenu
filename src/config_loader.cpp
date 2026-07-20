@@ -1,6 +1,7 @@
 #include "config_loader.h"
 #include "desktop_entry.h"
 #include "cli_parser.h"
+#include "theme_manager.h"
 
 #include <QDir>
 #include <QFile>
@@ -76,6 +77,27 @@ QList<MenuItem> ConfigLoader::loadMenu(const QString &menuName, const QString &c
     return items;
 }
 
+QVariantMap ConfigLoader::loadStyle(const QString &menuName, const QString &configPath) {
+    QJsonObject root = loadRoot(configPath);
+    if (root.isEmpty()) return ThemeManager::resolveStyle("blender");
+
+    QString theme = root.contains("theme") ? root["theme"].toString() : "blender";
+    QVariantMap styleOverrides = root.contains("style") ? root["style"].toObject().toVariantMap() : QVariantMap{};
+
+    if (!menuName.isEmpty() && root.contains("menus")) {
+        QJsonObject menuObj = root["menus"].toObject()[menuName].toObject();
+        if (menuObj.contains("theme"))
+            theme = menuObj["theme"].toString();
+        if (menuObj.contains("style")) {
+            QVariantMap menuStyle = menuObj["style"].toObject().toVariantMap();
+            for (auto it = menuStyle.cbegin(); it != menuStyle.cend(); ++it)
+                styleOverrides[it.key()] = it.value();
+        }
+    }
+
+    return ThemeManager::resolveStyle(theme, styleOverrides);
+}
+
 QVariantMap ConfigLoader::loadAllMenus(const QString &configPath) {
     QJsonObject root = loadRoot(configPath);
     if (root.isEmpty()) return {};
@@ -100,10 +122,13 @@ QVariantMap ConfigLoader::loadAllMenus(const QString &configPath) {
         bool spawnAtMouse    = menuObj.contains("spawnAtMouse")    ? menuObj["spawnAtMouse"].toBool(true)    : globalSpawnAtMouse;
         bool escapeClosesAll = menuObj.contains("escapeClosesAll") ? menuObj["escapeClosesAll"].toBool(false) : globalEscapeClosesAll;
 
+        QVariantMap menuStyle = loadStyle(menuName, configPath);
+
         QVariantMap menuData;
         menuData["items"]           = itemList;
         menuData["spawnAtMouse"]    = spawnAtMouse;
         menuData["escapeClosesAll"] = escapeClosesAll;
+        menuData["style"]           = menuStyle;
 
         result[menuName] = menuData;
     }

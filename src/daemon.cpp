@@ -24,6 +24,10 @@
 const QString DaemonServer::SOCKET_NAME = "drmenu-socket";
 
 int DaemonServer::run(int argc, char *argv[]) {
+    if (!qgetenv("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
+        QProcess::startDetached("hyprctl", {"eval", "layerrule = noanim, drmenu"});
+    }
+
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
@@ -55,6 +59,7 @@ int DaemonServer::run(int argc, char *argv[]) {
 
         auto layerWindow = LayerShellQt::Window::get(window);
         if (layerWindow) {
+            layerWindow->setScope(QStringLiteral("drmenu"));
             layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
             layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
             layerWindow->setAnchors(LayerShellQt::Window::Anchors(
@@ -142,10 +147,21 @@ int DaemonServer::run(int argc, char *argv[]) {
                 spawnAtMouse = payload["spawnAtMouse"].toBool(true);
                 bool escapeClosesAll = payload["escapeClosesAll"].toBool(false);
 
+                QVariantMap reqStyle;
+                if (payload.contains("style"))
+                    reqStyle = payload["style"].toObject().toVariantMap();
+
                 if (type == "menus") {
                     QVariantMap allMenus;
-                    for (const QString &key : payload["menus"].toObject().keys())
-                        allMenus[key] = payload["menus"].toObject()[key].toArray().toVariantList();
+                    QJsonObject menusObj = payload["menus"].toObject();
+                    for (const QString &key : menusObj.keys()) {
+                        QJsonValue val = menusObj[key];
+                        if (val.isObject()) {
+                            allMenus[key] = val.toObject().toVariantMap();
+                        } else {
+                            allMenus[key] = val.toArray().toVariantList();
+                        }
+                    }
 
                     QString initial = payload["initialMenu"].toString();
                     if (allMenus.isEmpty() || initial.isEmpty()) {
@@ -156,7 +172,7 @@ int DaemonServer::run(int argc, char *argv[]) {
 
                     activeClientSocket = clientSocket;
                     activeCommandMap   = buildCommandMap(allMenus);
-                    output.setMenuData(allMenus, initial, spawnAtMouse, escapeClosesAll);
+                    output.setMenuData(allMenus, initial, spawnAtMouse, escapeClosesAll, reqStyle);
 
                 } else {
                     // Inline item list
@@ -179,7 +195,7 @@ int DaemonServer::run(int argc, char *argv[]) {
                     activeClientSocket = clientSocket;
                     for (const MenuItem &item : items)
                         if (!item.command.isEmpty()) activeCommandMap[item.label] = item.command;
-                    output.setItems(CliParser::buildModel(items));
+                    output.setItems(CliParser::buildModel(items), reqStyle);
                 }
 
             } else {

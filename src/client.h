@@ -7,7 +7,8 @@
 
 class ClientRunner {
 public:
-    static bool tryRun(const QList<MenuItem> &items);
+    static bool tryRun(const QList<MenuItem> &items, const QVariantMap &style = {});
     static bool tryRunMenus(const QVariantMap &allMenus, const QString &initialMenu,
-                            bool spawnAtMouse = true, bool escapeClosesAll = false);
+                            bool spawnAtMouse = true, bool escapeClosesAll = false,
+                            const QVariantMap &style = {});
 };

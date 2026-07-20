@@ -18,6 +18,10 @@
 static int runInternal(int argc, char *argv[], OutputController &output, bool spawnAtMouse) {
     auto t_start = std::chrono::high_resolution_clock::now();
 
+    if (!qgetenv("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
+        QProcess::startDetached("hyprctl", {"eval", "layerrule = noanim, drmenu"});
+    }
+
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
@@ -27,7 +31,7 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
 
     TargetScreenInfo targetInfo = spawnAtMouse
         ? ScreenDetector::getTargetScreenInfo()
-        : TargetScreenInfo{};   // empty → falls back to screen center
+        : TargetScreenInfo{};
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("output", &output);
@@ -42,6 +46,8 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
 
         auto layerWindow = LayerShellQt::Window::get(window);
         if (layerWindow) {
+            layerWindow->setScope(QStringLiteral("drmenu"));
+
             QScreen *targetScreen = nullptr;
             if (!targetInfo.monitorName.isEmpty()) {
                 for (QScreen *s : QGuiApplication::screens()) {
@@ -61,12 +67,8 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
             layerWindow->setExclusiveZone(-1);
 
             if (targetScreen) {
-                int localX = targetInfo.localX;
-                int localY = targetInfo.localY;
-                if (localX < 0 || localY < 0) {
-                    localX = targetScreen->geometry().width()  / 2;
-                    localY = targetScreen->geometry().height() / 2;
-                }
+                int localX = targetInfo.localX < 0 ? targetScreen->geometry().width()  / 2 : targetInfo.localX;
+                int localY = targetInfo.localY < 0 ? targetScreen->geometry().height() / 2 : targetInfo.localY;
                 window->setProperty("menuX", localX);
                 window->setProperty("menuY", localY);
             }
@@ -83,7 +85,6 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
     return app.exec();
 }
 
-// ── Build label→command lookup across all menus ───────────────────────────────
 static QMap<QString, QString> buildCommandMap(const QVariantMap &allMenus) {
     QMap<QString, QString> map;
     for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
@@ -105,7 +106,8 @@ static QMap<QString, QString> buildCommandMap(const QVariantMap &allMenus) {
 
 // ── Config / nested menus mode ────────────────────────────────────────────────
 int StandaloneApp::run(int argc, char *argv[], const QVariantMap &allMenus,
-                       const QString &initialMenu, bool spawnAtMouse, bool escapeClosesAll) {
+                       const QString &initialMenu, bool spawnAtMouse, bool escapeClosesAll,
+                       const QVariantMap &style) {
     OutputController output;
     QMap<QString, QString> cmdMap = buildCommandMap(allMenus);
 
@@ -117,12 +119,13 @@ int StandaloneApp::run(int argc, char *argv[], const QVariantMap &allMenus,
         QCoreApplication::exit(0);
     };
     output.onCancelCallback = []() { QCoreApplication::exit(1); };
-    output.setMenuData(allMenus, initialMenu, spawnAtMouse, escapeClosesAll);
+    output.setMenuData(allMenus, initialMenu, spawnAtMouse, escapeClosesAll, style);
     return runInternal(argc, argv, output, spawnAtMouse);
 }
 
 // ── Inline / stdin mode ───────────────────────────────────────────────────────
-int StandaloneApp::runItems(int argc, char *argv[], const QList<MenuItem> &items) {
+int StandaloneApp::runItems(int argc, char *argv[], const QList<MenuItem> &items,
+                            const QVariantMap &style) {
     OutputController output;
     output.onSelectCallback = [items](const QString &label) {
         QTextStream(stdout) << label << "\n";
@@ -135,6 +138,6 @@ int StandaloneApp::runItems(int argc, char *argv[], const QList<MenuItem> &items
         QCoreApplication::exit(0);
     };
     output.onCancelCallback = []() { QCoreApplication::exit(1); };
-    output.setItems(CliParser::buildModel(items));
-    return runInternal(argc, argv, output, true); // inline mode always spawns at mouse
+    output.setItems(CliParser::buildModel(items), style);
+    return runInternal(argc, argv, output, true);
 }

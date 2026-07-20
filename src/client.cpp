@@ -9,8 +9,6 @@
 #include <QJsonArray>
 #include <chrono>
 
-// ── Shared response handler ────────────────────────────────────────────────────
-// Builds a flat label→command map from all menus so commands run on selection.
 static QMap<QString, QString> buildCommandMap(const QVariantMap &allMenus) {
     QMap<QString, QString> map;
     for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
@@ -55,7 +53,7 @@ static void waitForResponse(QLocalSocket &socket,
 }
 
 // ── Flat item list (inline / stdin mode) ──────────────────────────────────────
-bool ClientRunner::tryRun(const QList<MenuItem> &items) {
+bool ClientRunner::tryRun(const QList<MenuItem> &items, const QVariantMap &style) {
     QLocalSocket socket;
     socket.connectToServer(DaemonServer::SOCKET_NAME);
     if (!socket.waitForConnected(50)) return false;
@@ -69,10 +67,12 @@ bool ClientRunner::tryRun(const QList<MenuItem> &items) {
     QJsonObject payload;
     payload["type"]  = "items";
     payload["items"] = arr;
+    if (!style.isEmpty())
+        payload["style"] = QJsonObject::fromVariantMap(style);
+
     socket.write(QJsonDocument(payload).toJson(QJsonDocument::Compact) + "\n");
     socket.flush();
 
-    // Build command map from flat items list
     QMap<QString, QString> cmdMap;
     for (const MenuItem &item : items)
         if (!item.label.isEmpty() && !item.command.isEmpty())
@@ -84,7 +84,8 @@ bool ClientRunner::tryRun(const QList<MenuItem> &items) {
 
 // ── Full menu map (config / nested mode) ──────────────────────────────────────
 bool ClientRunner::tryRunMenus(const QVariantMap &allMenus, const QString &initialMenu,
-                                bool spawnAtMouse, bool escapeClosesAll) {
+                                bool spawnAtMouse, bool escapeClosesAll,
+                                const QVariantMap &style) {
     QLocalSocket socket;
     socket.connectToServer(DaemonServer::SOCKET_NAME);
     if (!socket.waitForConnected(50)) return false;
@@ -92,15 +93,24 @@ bool ClientRunner::tryRunMenus(const QVariantMap &allMenus, const QString &initi
     auto t_start = std::chrono::high_resolution_clock::now();
 
     QJsonObject menusJson;
-    for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it)
-        menusJson[it.key()] = QJsonArray::fromVariantList(it.value().toList());
+    for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
+        QVariant val = it.value();
+        if (val.typeId() == QMetaType::QVariantMap) {
+            menusJson[it.key()] = QJsonObject::fromVariantMap(val.toMap());
+        } else {
+            menusJson[it.key()] = QJsonArray::fromVariantList(val.toList());
+        }
+    }
 
     QJsonObject payload;
-    payload["type"]           = "menus";
-    payload["menus"]          = menusJson;
-    payload["initialMenu"]    = initialMenu;
-    payload["spawnAtMouse"]   = spawnAtMouse;
-    payload["escapeClosesAll"] = escapeClosesAll;
+    payload["type"]            = "menus";
+    payload["menus"]           = menusJson;
+    payload["initialMenu"]     = initialMenu;
+    payload["spawnAtMouse"]    = spawnAtMouse;
+    payload["escapeClosesAll"]  = escapeClosesAll;
+    if (!style.isEmpty())
+        payload["style"] = QJsonObject::fromVariantMap(style);
+
     socket.write(QJsonDocument(payload).toJson(QJsonDocument::Compact) + "\n");
     socket.flush();
 

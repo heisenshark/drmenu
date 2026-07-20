@@ -25,5 +25,9 @@ public:
     static MenuOptions loadMenuOptions(const QString &menuName,
                                        const QString &configPath = {});
 
+    // Load merged style for a menu (or top-level defaults)
+    static QVariantMap loadStyle(const QString &menuName = {},
+                                 const QString &configPath = {});
+
     static QStringList availableMenus(const QString &configPath = {});
 };
