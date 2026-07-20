@@ -367,12 +367,25 @@ ApplicationWindow {
             opacity: root.s.guideRingOpacity !== undefined ? root.s.guideRingOpacity : 0.07
         }
 
+        // ── Pie Wheel Background Disc ──────────────────────────────────────────
+        Rectangle {
+            visible: root.isPieMode
+            x: menuContainer.centerX - (root.s.outerRadius || 230)
+            y: menuContainer.centerY - (root.s.outerRadius || 230)
+            width:  (root.s.outerRadius || 230) * 2
+            height: width
+            radius: width / 2
+            color:  root.s.pieBackgroundColor || "#121218"
+            opacity: root.s.pieBackgroundOpacity !== undefined ? root.s.pieBackgroundOpacity : 0.95
+        }
+
         // ── MODE 1: Segmented Pie Wheel Sectors (Clear Dividers) ───────────────
         Repeater {
             model: menuModel
             delegate: Item {
                 id: pieSectorDelegate
                 visible: root.isPieMode
+                z: isHovered ? 2 : 0
 
                 required property int    index
                 required property string label
@@ -386,8 +399,8 @@ ApplicationWindow {
                 property bool hasXdgIcon: iconName !== ""
                 property bool hasEmoji:   icon !== ""
 
-                property real innerR: root.s.innerRadius || 50
-                property real outerR: isHovered ? ((root.s.outerRadius || 165) + 10) : (root.s.outerRadius || 165)
+                property real innerR: root.s.innerRadius || 65
+                property real outerR: isHovered ? ((root.s.outerRadius || 230) + 12) : (root.s.outerRadius || 230)
 
                 property real count: menuContainer.itemCount
                 property real sliceAngleDeg: 360 / count
@@ -399,48 +412,47 @@ ApplicationWindow {
                 property real endRad:   endDeg   * Math.PI / 180
                 property real midRad:   (startDeg + sliceAngleDeg / 2) * Math.PI / 180
 
-                property real contentRadius: (innerR + (root.s.outerRadius || 165)) / 2
+                property real contentRadius: (innerR + (root.s.outerRadius || 230)) / 2
                 property real contentX: menuContainer.centerX + contentRadius * Math.cos(midRad)
                 property real contentY: menuContainer.centerY + contentRadius * Math.sin(midRad)
 
+                property string wedgeSvgPath: {
+                    let x0 = menuContainer.centerX + innerR * Math.cos(startRad)
+                    let y0 = menuContainer.centerY + innerR * Math.sin(startRad)
+                    let x1 = menuContainer.centerX + outerR * Math.cos(startRad)
+                    let y1 = menuContainer.centerY + outerR * Math.sin(startRad)
+                    let x2 = menuContainer.centerX + outerR * Math.cos(endRad)
+                    let y2 = menuContainer.centerY + outerR * Math.sin(endRad)
+                    let x3 = menuContainer.centerX + innerR * Math.cos(endRad)
+                    let y3 = menuContainer.centerY + innerR * Math.sin(endRad)
+                    let largeArc = sliceAngleDeg > 180 ? 1 : 0
+
+                    return "M " + x0.toFixed(2) + " " + y0.toFixed(2) +
+                           " L " + x1.toFixed(2) + " " + y1.toFixed(2) +
+                           " A " + outerR.toFixed(2) + " " + outerR.toFixed(2) + " 0 " + largeArc + " 1 " + x2.toFixed(2) + " " + y2.toFixed(2) +
+                           " L " + x3.toFixed(2) + " " + y3.toFixed(2) +
+                           " A " + innerR.toFixed(2) + " " + innerR.toFixed(2) + " 0 " + largeArc + " 0 " + x0.toFixed(2) + " " + y0.toFixed(2) +
+                           " Z"
+                }
+
                 Shape {
-                    anchors.fill: parent
-                    layer.enabled: true
-                    layer.samples: 4
+                    width: menuContainer.width
+                    height: menuContainer.height
 
                     ShapePath {
-                        strokeWidth: root.s.delimiterWidth !== undefined ? root.s.delimiterWidth : 2
-                        strokeColor: root.s.delimiterColor || "#0d0d12"
+                        strokeWidth: pieSectorDelegate.isHovered ? 3 : (root.s.delimiterWidth !== undefined ? root.s.delimiterWidth : 2)
+                        strokeColor: pieSectorDelegate.isHovered
+                            ? (root.s.accentColor || "#e67e22")
+                            : (root.s.delimiterColor || "#383848")
 
                         fillColor: pieSectorDelegate.isHovered
-                            ? (pieSectorDelegate.isSubmenu ? (root.s.pieSliceSubmenuHoverColor || "#372750") : (root.s.pieSliceHoverColor || "#2c2c3a"))
-                            : (pieSectorDelegate.isSubmenu ? (root.s.pieSliceSubmenuColor || "#1e172a") : (root.s.pieSliceColor || "#1a1a22"))
+                            ? (root.s.pieSliceHoverColor || "#323246")
+                            : (root.s.pieSliceColor || "#1e1e2a")
 
                         Behavior on fillColor { ColorAnimation { duration: 40 } }
 
-                        PathMove {
-                            x: menuContainer.centerX + pieSectorDelegate.innerR * Math.cos(pieSectorDelegate.startRad)
-                            y: menuContainer.centerY + pieSectorDelegate.innerR * Math.sin(pieSectorDelegate.startRad)
-                        }
-                        PathLine {
-                            x: menuContainer.centerX + pieSectorDelegate.outerR * Math.cos(pieSectorDelegate.startRad)
-                            y: menuContainer.centerY + pieSectorDelegate.outerR * Math.sin(pieSectorDelegate.startRad)
-                        }
-                        PathAngleArc {
-                            centerX: menuContainer.centerX; centerY: menuContainer.centerY
-                            radiusX: pieSectorDelegate.outerR; radiusY: pieSectorDelegate.outerR
-                            startAngle: pieSectorDelegate.startDeg
-                            sweepAngle: pieSectorDelegate.sliceAngleDeg
-                        }
-                        PathLine {
-                            x: menuContainer.centerX + pieSectorDelegate.innerR * Math.cos(pieSectorDelegate.endRad)
-                            y: menuContainer.centerY + pieSectorDelegate.innerR * Math.sin(pieSectorDelegate.endRad)
-                        }
-                        PathAngleArc {
-                            centerX: menuContainer.centerX; centerY: menuContainer.centerY
-                            radiusX: pieSectorDelegate.innerR; radiusY: pieSectorDelegate.innerR
-                            startAngle: pieSectorDelegate.endDeg
-                            sweepAngle: -pieSectorDelegate.sliceAngleDeg
+                        PathSvg {
+                            path: pieSectorDelegate.wedgeSvgPath
                         }
                     }
                 }
@@ -497,6 +509,73 @@ ApplicationWindow {
                             font.pixelSize: 9
                             color: pieSectorDelegate.isHovered ? (root.s.submenuAccent || "#c084fc") : "#605075"
                             anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Pie Delimiters Overlay (Inner Ring, Outer Ring & Radial Spokes) ─────────
+        Item {
+            id: pieDelimitersOverlay
+            visible: root.isPieMode
+            z: 1
+            anchors.fill: parent
+
+            property real innerR: root.s.innerRadius || 65
+            property real outerR: root.s.outerRadius || 230
+            property int  dWidth: root.s.delimiterWidth !== undefined ? root.s.delimiterWidth : 3
+            property color dColor: root.s.delimiterColor || "#48485a"
+
+            // Inner Ring Delimiter (Ring between center hole and pie slices)
+            Rectangle {
+                x: menuContainer.centerX - pieDelimitersOverlay.innerR
+                y: menuContainer.centerY - pieDelimitersOverlay.innerR
+                width:  pieDelimitersOverlay.innerR * 2
+                height: pieDelimitersOverlay.innerR * 2
+                radius: pieDelimitersOverlay.innerR
+                color: "transparent"
+                border.color: pieDelimitersOverlay.dColor
+                border.width: pieDelimitersOverlay.dWidth
+            }
+
+            // Outer Ring Delimiter (Ring around outer boundary of pie wheel)
+            Rectangle {
+                x: menuContainer.centerX - pieDelimitersOverlay.outerR
+                y: menuContainer.centerY - pieDelimitersOverlay.outerR
+                width:  pieDelimitersOverlay.outerR * 2
+                height: pieDelimitersOverlay.outerR * 2
+                radius: pieDelimitersOverlay.outerR
+                color: "transparent"
+                border.color: root.s.pieOuterBorderColor || pieDelimitersOverlay.dColor
+                border.width: root.s.pieOuterBorderWidth !== undefined ? root.s.pieOuterBorderWidth : pieDelimitersOverlay.dWidth
+            }
+
+            // Radial Spokes Delimiters (Divider lines running from inner to outer circle)
+            Repeater {
+                model: menuContainer.itemCount
+                delegate: Shape {
+                    anchors.fill: parent
+                    layer.enabled: true
+                    layer.samples: 4
+
+                    property real count: menuContainer.itemCount
+                    property real sliceAngleDeg: 360 / count
+                    property real startDeg: index * sliceAngleDeg - 90
+                    property real startRad: startDeg * Math.PI / 180
+
+                    ShapePath {
+                        strokeWidth: pieDelimitersOverlay.dWidth
+                        strokeColor: pieDelimitersOverlay.dColor
+                        fillColor: "transparent"
+
+                        PathMove {
+                            x: menuContainer.centerX + pieDelimitersOverlay.innerR * Math.cos(startRad)
+                            y: menuContainer.centerY + pieDelimitersOverlay.innerR * Math.sin(startRad)
+                        }
+                        PathLine {
+                            x: menuContainer.centerX + pieDelimitersOverlay.outerR * Math.cos(startRad)
+                            y: menuContainer.centerY + pieDelimitersOverlay.outerR * Math.sin(startRad)
                         }
                     }
                 }
@@ -622,14 +701,16 @@ ApplicationWindow {
         Rectangle {
             x: menuContainer.centerX - width  / 2
             y: menuContainer.centerY - height / 2
-            width:  root.isPieMode ? ((root.s.innerRadius || 50) * 2) : ((root.s.centerRadius || 15) * 2)
+            width:  root.isPieMode ? ((root.s.innerRadius || 65) * 2) : ((root.s.centerRadius || 15) * 2)
             height: width
             radius: width / 2
-            color:  root.s.centerColor || "#18181c"
+            color:  root.s.centerColor || "#111116"
             border.color: menuContainer.hoveredIndex !== -1
-                ? (root.s.centerBorderHover || "#e67e22")
-                : (root.hasParent ? (root.s.submenuAccent || "#a855f7") : (root.s.centerBorder || "#4a4a56"))
-            border.width: 2
+                ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || "#e67e22")
+                : (root.hasParent
+                    ? (root.s.submenuAccent || "#c084fc")
+                    : (root.s.centerBorderColor || root.s.centerBorder || "#48485a"))
+            border.width: root.s.centerBorderWidth !== undefined ? root.s.centerBorderWidth : 3
 
             Behavior on border.color { ColorAnimation { duration: 50 } }
 
