@@ -1,45 +1,115 @@
 import QtQuick
+import QtQuick.Shapes
 
-Rectangle {
+Item {
     id: centerPivot
 
     property var rootRef: root
     property var menuContainerRef: menuContainer
 
+    property bool isBlenderMode: rootRef.s.centerLayout === "torus" || (rootRef.s.showCenterArc && rootRef.s.centerBorderWidth === 0)
+    property real torusRadius: isBlenderMode ? (rootRef.s.torusRadius || 26) : (rootRef.isPieMode ? (rootRef.s.innerRadius || 65) : (rootRef.s.centerRadius || 15))
+
     x: menuContainerRef.centerX - width  / 2
     y: menuContainerRef.centerY - height / 2
-    width:  rootRef.isPieMode ? ((rootRef.s.innerRadius || 65) * 2) : ((rootRef.s.centerRadius || 15) * 2)
-    height: width
-    radius: width / 2
-    color:  rootRef.s.centerColor || "#111116"
-    border.color: menuContainerRef.hoveredIndex !== -1
-        ? (rootRef.s.centerBorderHoverColor || rootRef.s.centerBorderHover || "#e67e22")
-        : (rootRef.hasParent
-            ? (rootRef.s.submenuAccent || "#c084fc")
-            : (rootRef.s.centerBorderColor || rootRef.s.centerBorder || "#5a5a72"))
-    border.width: rootRef.s.centerBorderWidth !== undefined ? rootRef.s.centerBorderWidth : 3
+    width:  torusRadius * 2
+    height: torusRadius * 2
     z: 10
 
-    Behavior on border.color { ColorAnimation { duration: 50 } }
+    // ── Mode A: Solid Circle Center Pivot (Standard Pie Theme) ────────────────
+    Rectangle {
+        anchors.fill: parent
+        visible: !centerPivot.isBlenderMode
+        radius: width / 2
+        color:  rootRef.s.centerColor || "#111116"
+        border.color: (rootRef.s.centerBorderWidth === 0)
+            ? "transparent"
+            : (menuContainerRef.hoveredIndex !== -1
+                ? (rootRef.s.centerBorderHoverColor || rootRef.s.centerBorderHover || "#e67e22")
+                : (rootRef.hasParent
+                    ? (rootRef.s.submenuAccent || "#c084fc")
+                    : (rootRef.s.centerBorderColor || rootRef.s.centerBorder || "#5a5a72")))
+        border.width: rootRef.s.centerBorderWidth !== undefined ? rootRef.s.centerBorderWidth : 3
 
+        Behavior on border.color { ColorAnimation { duration: 50 } }
+    }
+
+    // ── Mode B: Blender Donut Torus Ring Body ────────────────────────────────
+    Shape {
+        id: torusBaseShape
+        visible: centerPivot.isBlenderMode
+        anchors.fill: parent
+        layer.enabled: true
+        layer.samples: 4
+
+        property real thick: rootRef.s.centerTorusThickness || 8
+        property real r:     centerPivot.width / 2 - thick / 2
+
+        ShapePath {
+            strokeWidth: torusBaseShape.thick
+            strokeColor: rootRef.s.centerTorusColor || "#383838"
+            fillColor:   "transparent"
+
+            PathAngleArc {
+                centerX:    centerPivot.width / 2
+                centerY:    centerPivot.height / 2
+                radiusX:    torusBaseShape.r
+                radiusY:    torusBaseShape.r
+                startAngle: 0
+                sweepAngle: 360
+            }
+        }
+    }
+
+    // ── Blender Mouse-Tracking 90° Blue Arc Indicator ─────────────────────────
+    Shape {
+        id: blenderArcShape
+        visible: centerPivot.isBlenderMode && (rootRef.s.showCenterArc !== false)
+        anchors.fill: parent
+        layer.enabled: true
+        layer.samples: 4
+
+        property real arcSpread: rootRef.s.centerArcAngle !== undefined ? rootRef.s.centerArcAngle : 90
+        property real thick:     rootRef.s.centerArcWidth || rootRef.s.centerTorusThickness || 8
+        property real r:         centerPivot.width / 2 - thick / 2
+        property real startDeg:  menuContainerRef.currentMouseAngleDeg - arcSpread / 2
+
+        ShapePath {
+            strokeWidth: blenderArcShape.thick
+            strokeColor: rootRef.s.centerArcColor || rootRef.s.accentColor || "#3b82f6"
+            fillColor:   "transparent"
+            capStyle:    ShapePath.FlatCap
+
+            PathAngleArc {
+                centerX:    centerPivot.width / 2
+                centerY:    centerPivot.height / 2
+                radiusX:    blenderArcShape.r
+                radiusY:    blenderArcShape.r
+                startAngle: blenderArcShape.startDeg
+                sweepAngle: blenderArcShape.arcSpread
+            }
+        }
+    }
+
+    // ── Center Hole Indicators (Dot / Back Arrow) ────────────────────────────
     Text {
         anchors.centerIn: parent
         visible: rootRef.hasParent && menuContainerRef.hoveredIndex === -1
         text: "←"
         font.family: rootRef.s.fontFamily || "Sans"
         font.pixelSize: (rootRef.s.fontSize || 13) + 2
-        color: rootRef.s.submenuAccent || "#c084fc"
+        color: rootRef.s.submenuAccent || "#60a5fa"
     }
 
     Rectangle {
         anchors.centerIn: parent
         visible: !(rootRef.hasParent && menuContainerRef.hoveredIndex === -1)
-        width:  menuContainerRef.hoveredIndex !== -1 ? 12 : 7
+        width:  menuContainerRef.hoveredIndex !== -1 ? 8 : 5
         height: width
         radius: width / 2
         color:  menuContainerRef.hoveredIndex !== -1
-                ? (rootRef.s.centerDotHoverColor || "#e67e22")
-                : (rootRef.s.centerDotColor || "#808090")
+                ? (rootRef.s.centerDotHoverColor || "#3b82f6")
+                : (rootRef.s.centerDotColor || "#808080")
 
         Behavior on width { NumberAnimation { duration: 40 } }
         Behavior on color { ColorAnimation  { duration: 40 } }

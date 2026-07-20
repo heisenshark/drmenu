@@ -254,8 +254,9 @@ ApplicationWindow {
         property real margin:  radiusDistance + 110
         property real centerX: Math.max(margin, Math.min(width  - margin, root.menuX))
         property real centerY: Math.max(margin, Math.min(height - margin, root.menuY))
-        property int  itemCount:    menuModel.count
-        property int  hoveredIndex: -1
+        property int  itemCount:            menuModel.count
+        property int  hoveredIndex:         -1
+        property real currentMouseAngleDeg: 0
 
         // ── Dim background ───────────────────────────────────────────────────────
         Rectangle {
@@ -274,6 +275,9 @@ ApplicationWindow {
                 let dx = mouse.x - menuContainer.centerX
                 let dy = mouse.y - menuContainer.centerY
                 let dist = Math.sqrt(dx*dx + dy*dy)
+
+                let mouseAngleRad = Math.atan2(dy, dx)
+                menuContainer.currentMouseAngleDeg = mouseAngleRad * 180 / Math.PI
 
                 let minRadius = root.isPieMode ? (root.s.innerRadius || 65) : 20
 

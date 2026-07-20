@@ -62,10 +62,10 @@ Item {
         height: menuContainerRef.height
 
         ShapePath {
-            strokeWidth: pieSectorDelegate.isHovered ? 3 : (rootRef.s.delimiterWidth !== undefined ? rootRef.s.delimiterWidth : 2)
-            strokeColor: pieSectorDelegate.isHovered
+            strokeWidth: (rootRef.s.delimiterWidth === 0) ? 0 : (pieSectorDelegate.isHovered ? 3 : (rootRef.s.delimiterWidth !== undefined ? rootRef.s.delimiterWidth : 2))
+            strokeColor: (rootRef.s.delimiterWidth === 0) ? "transparent" : (pieSectorDelegate.isHovered
                 ? (rootRef.s.accentColor || "#e67e22")
-                : (rootRef.s.delimiterColor || "#383848")
+                : (rootRef.s.delimiterColor || "#383848"))
 
             fillColor: pieSectorDelegate.isHovered
                 ? (rootRef.s.pieSliceHoverColor || "#323246")
@@ -83,11 +83,27 @@ Item {
     Item {
         x: pieSectorDelegate.contentX - width / 2
         y: pieSectorDelegate.contentY - height / 2
-        width: pieRow.implicitWidth
-        height: pieRow.implicitHeight
+        width: pieRow.implicitWidth + (rootRef.s.highlightOptionRect ? 18 : 0)
+        height: pieRow.implicitHeight + (rootRef.s.highlightOptionRect ? 10 : 0)
 
-        scale: pieSectorDelegate.isHovered ? 1.12 : 1.0
+        scale: pieSectorDelegate.isHovered ? 1.06 : 1.0
         Behavior on scale { NumberAnimation { duration: 40 } }
+
+        Rectangle {
+            anchors.fill: parent
+            visible: (rootRef.s.highlightOptionRect === true) || (rootRef.s.showOptionRectAlways === true)
+            radius: rootRef.s.optionRectRadius !== undefined ? rootRef.s.optionRectRadius : 6
+            color: pieSectorDelegate.isHovered
+                ? (rootRef.s.optionRectHoverColor || "#2b5b88")
+                : (rootRef.s.optionRectColor || "#222226")
+            border.color: pieSectorDelegate.isHovered
+                ? (rootRef.s.optionRectHoverBorder || "#3b82f6")
+                : (rootRef.s.optionRectBorder || "#333338")
+            border.width: 1
+
+            Behavior on color        { ColorAnimation { duration: 40 } }
+            Behavior on border.color { ColorAnimation { duration: 40 } }
+        }
 
         Row {
             id: pieRow
