@@ -23,6 +23,38 @@
 
 const QString DaemonServer::SOCKET_NAME = "drmenu-socket";
 
+static QVariantList jsonArrayToVariantList(const QJsonArray &arr) {
+    QVariantList list;
+    for (const QJsonValue &v : arr) {
+        if (v.isObject()) {
+            QJsonObject obj = v.toObject();
+            QVariantMap itemMap;
+            itemMap["label"]       = obj["label"].toString();
+            itemMap["icon"]        = obj["icon"].toString();
+            itemMap["iconName"]    = obj["iconName"].toString();
+            itemMap["command"]     = obj["command"].toString();
+            itemMap["submenuName"] = obj["submenuName"].toString();
+            if (!itemMap["label"].toString().isEmpty()) {
+                list.append(itemMap);
+            }
+        }
+    }
+    return list;
+}
+
+static QVariantMap jsonObjectToMenuMap(const QJsonObject &mObj) {
+    QVariantMap menuMap;
+    if (mObj.contains("items"))
+        menuMap["items"] = jsonArrayToVariantList(mObj["items"].toArray());
+    if (mObj.contains("spawnAtMouse"))
+        menuMap["spawnAtMouse"] = mObj["spawnAtMouse"].toBool();
+    if (mObj.contains("escapeClosesAll"))
+        menuMap["escapeClosesAll"] = mObj["escapeClosesAll"].toBool();
+    if (mObj.contains("style"))
+        menuMap["style"] = mObj["style"].toObject().toVariantMap();
+    return menuMap;
+}
+
 int DaemonServer::run(int argc, char *argv[]) {
     if (!qgetenv("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
         QProcess proc;
@@ -79,7 +111,6 @@ int DaemonServer::run(int argc, char *argv[]) {
     engine.load(url);
 
     QLocalSocket *activeClientSocket = nullptr;
-    // Label→command map for the currently active menu session
     QMap<QString, QString> activeCommandMap;
 
     auto buildCommandMap = [](const QVariantMap &allMenus) {
@@ -102,12 +133,10 @@ int DaemonServer::run(int argc, char *argv[]) {
     };
 
     output.onSelectCallback = [&activeClientSocket, &window, &activeCommandMap](const QString &label) {
-        // Run the command for this label if one exists
         auto it = activeCommandMap.find(label);
         if (it != activeCommandMap.end())
             QProcess::startDetached("sh", {"-c", it.value()});
 
-        // Notify client
         if (activeClientSocket && activeClientSocket->isOpen()) {
             activeClientSocket->write(("SELECTED\t" + label + "\n").toUtf8());
             activeClientSocket->flush();
@@ -144,6 +173,7 @@ int DaemonServer::run(int argc, char *argv[]) {
             QJsonParseError jsonErr;
             QJsonDocument doc = QJsonDocument::fromJson(data, &jsonErr);
             bool spawnAtMouse = true;
+            QVariantMap reqStyle;
 
             if (jsonErr.error == QJsonParseError::NoError && doc.isObject()) {
                 QJsonObject payload = doc.object();
@@ -151,7 +181,6 @@ int DaemonServer::run(int argc, char *argv[]) {
                 spawnAtMouse = payload["spawnAtMouse"].toBool(true);
                 bool escapeClosesAll = payload["escapeClosesAll"].toBool(false);
 
-                QVariantMap reqStyle;
                 if (payload.contains("style"))
                     reqStyle = payload["style"].toObject().toVariantMap();
 
@@ -161,9 +190,11 @@ int DaemonServer::run(int argc, char *argv[]) {
                     for (const QString &key : menusObj.keys()) {
                         QJsonValue val = menusObj[key];
                         if (val.isObject()) {
-                            allMenus[key] = val.toObject().toVariantMap();
-                        } else {
-                            allMenus[key] = val.toArray().toVariantList();
+                            allMenus[key] = jsonObjectToMenuMap(val.toObject());
+                        } else if (val.isArray()) {
+                            QVariantMap m;
+                            m["items"] = jsonArrayToVariantList(val.toArray());
+                            allMenus[key] = m;
                         }
                     }
 
@@ -216,7 +247,7 @@ int DaemonServer::run(int argc, char *argv[]) {
                 activeClientSocket = clientSocket;
                 for (const MenuItem &item : items)
                     if (!item.command.isEmpty()) activeCommandMap[item.label] = item.command;
-                output.setItems(CliParser::buildModel(items));
+                output.setItems(CliParser::buildModel(items), reqStyle);
             }
 
             // Position the window

@@ -9,13 +9,38 @@
 #include <QJsonArray>
 #include <chrono>
 
+static QJsonArray variantListToJsonArray(const QVariantList &list) {
+    QJsonArray arr;
+    for (const QVariant &v : list) {
+        if (v.typeId() == QMetaType::QVariantMap)
+            arr.append(QJsonObject::fromVariantMap(v.toMap()));
+    }
+    return arr;
+}
+
+static QJsonObject menuMapToJsonObject(const QVariantMap &menuMap) {
+    QJsonObject obj;
+    if (menuMap.contains("items"))
+        obj["items"] = variantListToJsonArray(menuMap["items"].toList());
+    if (menuMap.contains("spawnAtMouse"))
+        obj["spawnAtMouse"] = menuMap["spawnAtMouse"].toBool();
+    if (menuMap.contains("escapeClosesAll"))
+        obj["escapeClosesAll"] = menuMap["escapeClosesAll"].toBool();
+    if (menuMap.contains("style"))
+        obj["style"] = QJsonObject::fromVariantMap(menuMap["style"].toMap());
+    return obj;
+}
+
 static QMap<QString, QString> buildCommandMap(const QVariantMap &allMenus) {
     QMap<QString, QString> map;
     for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
         QVariant val = it.value();
-        QVariantList itemList = (val.typeId() == QMetaType::QVariantMap)
-            ? val.toMap()["items"].toList()
-            : val.toList();
+        QVariantList itemList;
+        if (val.typeId() == QMetaType::QVariantMap) {
+            itemList = val.toMap()["items"].toList();
+        } else {
+            itemList = val.toList();
+        }
 
         for (const QVariant &v : itemList) {
             QVariantMap item = v.toMap();
@@ -41,14 +66,16 @@ static void waitForResponse(QLocalSocket &socket,
 
     if (respStr.startsWith("SELECTED\t")) {
         QString selected = respStr.mid(9);
-        QTextStream(stdout) << selected << "\n";
+        QTextStream out(stdout);
+        out << selected << Qt::endl;
 
         auto it = commandMap.find(selected);
         if (it != commandMap.end())
             QProcess::startDetached("sh", {"-c", it.value()});
 
-        QTextStream(stderr) << "[drmenu client latency: "
-                            << QString::number(ms, 'f', 2) << " ms]\n";
+        QTextStream err(stderr);
+        err << "[drmenu client latency: "
+            << QString::number(ms, 'f', 2) << " ms]" << Qt::endl;
     }
 }
 
@@ -56,7 +83,7 @@ static void waitForResponse(QLocalSocket &socket,
 bool ClientRunner::tryRun(const QList<MenuItem> &items, const QVariantMap &style) {
     QLocalSocket socket;
     socket.connectToServer(DaemonServer::SOCKET_NAME);
-    if (!socket.waitForConnected(50)) return false;
+    if (!socket.waitForConnected(200)) return false;
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
@@ -88,7 +115,7 @@ bool ClientRunner::tryRunMenus(const QVariantMap &allMenus, const QString &initi
                                 const QVariantMap &style) {
     QLocalSocket socket;
     socket.connectToServer(DaemonServer::SOCKET_NAME);
-    if (!socket.waitForConnected(50)) return false;
+    if (!socket.waitForConnected(200)) return false;
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
@@ -96,9 +123,9 @@ bool ClientRunner::tryRunMenus(const QVariantMap &allMenus, const QString &initi
     for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
         QVariant val = it.value();
         if (val.typeId() == QMetaType::QVariantMap) {
-            menusJson[it.key()] = QJsonObject::fromVariantMap(val.toMap());
+            menusJson[it.key()] = menuMapToJsonObject(val.toMap());
         } else {
-            menusJson[it.key()] = QJsonArray::fromVariantList(val.toList());
+            menusJson[it.key()] = variantListToJsonArray(val.toList());
         }
     }
 

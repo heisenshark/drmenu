@@ -116,7 +116,8 @@ int StandaloneApp::run(int argc, char *argv[], const QVariantMap &allMenus,
     QMap<QString, QString> cmdMap = buildCommandMap(allMenus);
 
     output.onSelectCallback = [cmdMap](const QString &label) {
-        QTextStream(stdout) << label << "\n";
+        QTextStream out(stdout);
+        out << label << Qt::endl;
         auto it = cmdMap.find(label);
         if (it != cmdMap.end())
             QProcess::startDetached("sh", {"-c", it.value()});
@@ -132,7 +133,8 @@ int StandaloneApp::runItems(int argc, char *argv[], const QList<MenuItem> &items
                             const QVariantMap &style) {
     OutputController output;
     output.onSelectCallback = [items](const QString &label) {
-        QTextStream(stdout) << label << "\n";
+        QTextStream out(stdout);
+        out << label << Qt::endl;
         for (const MenuItem &item : items) {
             if (item.label == label && !item.command.isEmpty()) {
                 QProcess::startDetached("sh", {"-c", item.command});

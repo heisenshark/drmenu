@@ -1,5 +1,6 @@
 #include "cli_parser.h"
 #include <QTextStream>
+#include <QProcess>
 #include <cstdio>
 
 // ── Core entry parser ─────────────────────────────────────────────────────────
@@ -48,8 +49,8 @@ ParsedArgs CliParser::parse(int argc, char *argv[]) {
     if (!positional.isEmpty()) {
         for (const QString &a : positional)
             args.items.append(parseEntry(a));
-    } else if (args.menuName.isEmpty()) {
-        // stdin items (dmenu style) only if no --menu flag
+    } else if (!args.daemonMode && args.menuName.isEmpty()) {
+        // stdin items (dmenu style) only if not daemon mode and no --menu flag
         QTextStream in(stdin);
         while (!in.atEnd()) {
             QString line = in.readLine();

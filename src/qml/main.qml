@@ -578,7 +578,6 @@ ApplicationWindow {
 
                         Text {
                             visible: !pillDelegate.hasXdgIcon
-                            width:   visible ? implicitWidth : 0
                             text:    pillDelegate.hasEmoji
                                      ? pillDelegate.icon
                                      : (pillDelegate.isSubmenu ? "☰" : pillDelegate.label.charAt(0).toUpperCase())

@@ -3,7 +3,9 @@
 #include "daemon.h"
 #include "client.h"
 #include "standalone_app.h"
+
 #include <QTextStream>
+#include <QProcess>
 
 int main(int argc, char *argv[]) {
     ParsedArgs args = CliParser::parse(argc, argv);
@@ -41,10 +43,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    QVariantMap defaultStyle = ConfigLoader::loadStyle({}, args.configPath);
-
-    if (ClientRunner::tryRun(args.items, defaultStyle))
+    if (ClientRunner::tryRun(args.items, QVariantMap()))
         return 0;
 
-    return StandaloneApp::runItems(argc, argv, args.items, defaultStyle);
+    return StandaloneApp::runItems(argc, argv, args.items, QVariantMap());
 }
