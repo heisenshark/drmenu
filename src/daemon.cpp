@@ -25,7 +25,11 @@ const QString DaemonServer::SOCKET_NAME = "drmenu-socket";
 
 int DaemonServer::run(int argc, char *argv[]) {
     if (!qgetenv("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
-        QProcess::startDetached("hyprctl", {"eval", "layerrule = noanim, drmenu"});
+        QProcess proc;
+        proc.setStandardOutputFile(QProcess::nullDevice());
+        proc.setStandardErrorFile(QProcess::nullDevice());
+        proc.start("hyprctl", {"eval", "layerrule = noanim, drmenu"});
+        proc.waitForFinished(100);
     }
 
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
