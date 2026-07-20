@@ -2,6 +2,7 @@
 #include "cli_parser.h"
 #include "screen_detector.h"
 #include "output_controller.h"
+#include "theme_icon_provider.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -11,6 +12,10 @@
 #include <QLocalSocket>
 #include <QScreen>
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonParseError>
 
 #include <LayerShellQt/Window>
 #include <chrono>
@@ -63,6 +68,7 @@ int DaemonServer::run(int argc, char *argv[]) {
         }
     }, Qt::QueuedConnection);
 
+    engine.addImageProvider(QStringLiteral("icon"), new ThemeIconProvider);
     engine.load(url);
 
     QLocalSocket *activeClientSocket = nullptr;
@@ -98,9 +104,24 @@ int DaemonServer::run(int argc, char *argv[]) {
             QString rawInput = QString::fromUtf8(data).trimmed();
 
             QList<MenuItem> items;
-            for (const QString &line : rawInput.split('\n')) {
-                if (!line.trimmed().isEmpty())
-                    items.append(CliParser::parseEntry(line));
+            QJsonParseError jsonErr;
+            QJsonDocument doc = QJsonDocument::fromJson(data, &jsonErr);
+            if (jsonErr.error == QJsonParseError::NoError && doc.isArray()) {
+                for (const QJsonValue &v : doc.array()) {
+                    QJsonObject obj = v.toObject();
+                    MenuItem it;
+                    it.label    = obj["label"].toString();
+                    it.icon     = obj["icon"].toString();
+                    it.iconName = obj["iconName"].toString();
+                    it.command  = obj["command"].toString();
+                    if (!it.label.isEmpty()) items.append(it);
+                }
+            } else {
+                // Fallback: plain-text lines (legacy / stdin piping)
+                for (const QString &line : rawInput.split('\n')) {
+                    if (!line.trimmed().isEmpty())
+                        items.append(CliParser::parseEntry(line));
+                }
             }
 
             if (items.isEmpty()) {

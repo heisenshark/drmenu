@@ -3,25 +3,26 @@
 
 #include <QLocalSocket>
 #include <QTextStream>
+#include <QProcess>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <chrono>
 
 bool ClientRunner::tryRun(const QList<MenuItem> &items) {
     QLocalSocket socket;
     socket.connectToServer(DaemonServer::SOCKET_NAME);
-    if (!socket.waitForConnected(50)) {
+    if (!socket.waitForConnected(50))
         return false;
-    }
 
     auto t_client_start = std::chrono::high_resolution_clock::now();
 
-    QString payload;
-    for (const MenuItem &item : items) {
-        payload += item.label;
-        if (!item.icon.isEmpty()) payload += ":" + item.icon;
-        if (!item.command.isEmpty()) payload += "\t" + item.command;
-        payload += "\n";
-    }
-    socket.write(payload.toUtf8());
+    // Serialize items as a JSON array, terminated by newline
+    QJsonArray arr;
+    for (const MenuItem &item : items)
+        arr.append(QJsonObject::fromVariantMap(item.toVariantMap()));
+
+    socket.write(QJsonDocument(arr).toJson(QJsonDocument::Compact) + "\n");
     socket.flush();
 
     if (socket.waitForReadyRead(30000)) {
@@ -33,12 +34,20 @@ bool ClientRunner::tryRun(const QList<MenuItem> &items) {
 
         if (respStr.startsWith("SELECTED\t")) {
             QString selected = respStr.mid(9);
-            QTextStream out(stdout);
-            out << selected << "\n";
-            out.flush();
 
-            QTextStream err(stderr);
-            err << "[drmenu daemon client latency: " << QString::number(ms_client, 'f', 2) << " ms]\n";
+            // Print to stdout (dmenu compatible)
+            QTextStream(stdout) << selected << "\n";
+
+            // Run the associated command if defined
+            for (const MenuItem &item : items) {
+                if (item.label == selected && !item.command.isEmpty()) {
+                    QProcess::startDetached("sh", {"-c", item.command});
+                    break;
+                }
+            }
+
+            QTextStream(stderr) << "[drmenu daemon client latency: "
+                                << QString::number(ms_client, 'f', 2) << " ms]\n";
         }
     }
 

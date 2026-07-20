@@ -48,9 +48,10 @@ ApplicationWindow {
                 for (let i = 0; i < list.length; ++i) {
                     let e = list[i]
                     menuModel.append({
-                        label:   e.label   || "",
-                        icon:    e.icon    || "",
-                        command: e.command || ""
+                        label:    e.label    || "",
+                        icon:     e.icon     || "",
+                        iconName: e.iconName || "",
+                        command:  e.command  || ""
                     })
                 }
             }
@@ -63,9 +64,10 @@ ApplicationWindow {
             for (let i = 0; i < list.length; ++i) {
                 let e = list[i]
                 menuModel.append({
-                    label:   e.label   || "",
-                    icon:    e.icon    || "",
-                    command: e.command || ""
+                    label:    e.label    || "",
+                    icon:     e.icon     || "",
+                    iconName: e.iconName || "",
+                    command:  e.command  || ""
                 })
             }
         }
@@ -187,7 +189,8 @@ ApplicationWindow {
                 property bool   isHovered:   menuContainer.hoveredIndex === index
                 property real   sliceAngle:  360 / menuContainer.itemCount
                 property real   midAngleRad: (index * sliceAngle - 90 + sliceAngle / 2) * Math.PI / 180
-                property string displayIcon: model.icon !== "" ? model.icon : model.label.charAt(0).toUpperCase()
+                property bool   hasXdgIcon:  model.iconName !== ""
+                property bool   hasEmoji:    model.icon !== ""
 
                 // Calculate center position along radial vector
                 property real targetX: menuContainer.centerX + menuContainer.radiusDistance * Math.cos(midAngleRad)
@@ -196,7 +199,7 @@ ApplicationWindow {
                 x: targetX - width / 2
                 y: targetY - height / 2
                 width: pillRow.implicitWidth + 24
-                height: 38
+                height: 42
 
                 Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
                 scale: isHovered ? 1.1 : 1.0
@@ -218,10 +221,28 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         spacing: 8
 
+                        // XDG icon (system app icon from theme)
+                        Image {
+                            visible: pillDelegate.hasXdgIcon
+                            width:  visible ? 22 : 0
+                            height: 22
+                            source: pillDelegate.hasXdgIcon ? "image://icon/" + model.iconName : ""
+                            anchors.verticalCenter: parent.verticalCenter
+                            smooth: true
+                            mipmap: true
+                            opacity: pillDelegate.isHovered ? 1.0 : 0.75
+                            Behavior on opacity { NumberAnimation { duration: 100 } }
+                        }
+
+                        // Emoji / text icon fallback
                         Text {
-                            text: pillDelegate.displayIcon
-                            font.pixelSize: model.icon !== "" ? 18 : 14
-                            font.bold: model.icon === ""
+                            visible: !pillDelegate.hasXdgIcon
+                            width:  visible ? implicitWidth : 0
+                            text: pillDelegate.hasEmoji
+                                  ? model.icon
+                                  : model.label.charAt(0).toUpperCase()
+                            font.pixelSize: pillDelegate.hasEmoji ? 17 : 13
+                            font.bold: !pillDelegate.hasEmoji
                             color: pillDelegate.isHovered ? "#f39c12" : "#a0a0ab"
                             anchors.verticalCenter: parent.verticalCenter
                         }

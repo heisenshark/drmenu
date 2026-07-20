@@ -22,6 +22,9 @@ qt_standard_project_setup()
 qt_add_executable(drmenu
     src/main.cpp
     src/cli_parser.cpp
+    src/config_loader.cpp
+    src/desktop_entry.cpp
+    src/theme_icon_provider.cpp
     src/screen_detector.cpp
     src/output_controller.cpp
     src/daemon.cpp

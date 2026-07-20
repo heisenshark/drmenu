@@ -2,6 +2,7 @@
 #include "cli_parser.h"
 #include "screen_detector.h"
 #include "output_controller.h"
+#include "theme_icon_provider.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -9,6 +10,7 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QTextStream>
+#include <QProcess>
 #include <chrono>
 
 #include <LayerShellQt/Window>
@@ -27,10 +29,16 @@ int StandaloneApp::run(int argc, char *argv[], const QList<MenuItem> &items) {
 
     QQmlApplicationEngine engine;
     OutputController output;
-    output.onSelectCallback = [](const QString &label) {
-        QTextStream out(stdout);
-        out << label << "\n";
-        out.flush();
+    output.onSelectCallback = [items](const QString &label) {
+        // Print to stdout (dmenu compatible)
+        QTextStream(stdout) << label << "\n";
+        // Run associated command if defined
+        for (const MenuItem &item : items) {
+            if (item.label == label && !item.command.isEmpty()) {
+                QProcess::startDetached("sh", {"-c", item.command});
+                break;
+            }
+        }
         QCoreApplication::exit(0);
     };
     output.onCancelCallback = []() {
@@ -93,6 +101,7 @@ int StandaloneApp::run(int argc, char *argv[], const QList<MenuItem> &items) {
 
     }, Qt::QueuedConnection);
 
+    engine.addImageProvider(QStringLiteral("icon"), new ThemeIconProvider);
     engine.load(url);
     return app.exec();
 }

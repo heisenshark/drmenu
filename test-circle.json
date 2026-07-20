@@ -1,0 +1,10 @@
+    {
+      "menus": {
+        "myapps": {
+          "items": [
+            { "label": "Firefox",  "icon": "🌐", "command": "firefox" },
+            { "label": "Terminal", "icon": "💻", "command": "kitty" }
+          ]
+        }
+      }
+    }
