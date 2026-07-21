@@ -134,15 +134,15 @@ int DaemonServer::run(int argc, char *argv[]) {
     };
 
     output.onSelectCallback = [&activeClientSocket, &window, &activeCommandMap](const QString &label) {
-        auto it = activeCommandMap.find(label);
-        if (it != activeCommandMap.end())
-            QProcess::startDetached("sh", {"-c", it.value()});
-
         if (activeClientSocket && activeClientSocket->isOpen()) {
             activeClientSocket->write(("SELECTED\t" + label + "\n").toUtf8());
             activeClientSocket->flush();
             activeClientSocket->disconnectFromServer();
             activeClientSocket = nullptr;
+        } else {
+            auto it = activeCommandMap.find(label);
+            if (it != activeCommandMap.end())
+                QProcess::startDetached("sh", {"-c", it.value()});
         }
         if (window) window->setVisible(false);
         activeCommandMap.clear();
