@@ -37,8 +37,10 @@ static MenuItem itemFromJson(const QJsonObject &obj) {
 
     if (obj.contains("app")) {
         item = DesktopEntry::resolve(obj["app"].toString().trimmed());
-        if (obj.contains("label"))   item.label   = obj["label"].toString().trimmed();
-        if (obj.contains("command")) item.command = obj["command"].toString().trimmed();
+        if (obj.contains("label"))    item.label    = obj["label"].toString().trimmed();
+        if (obj.contains("command"))  item.command  = obj["command"].toString().trimmed();
+        if (obj.contains("iconName")) item.iconName = obj["iconName"].toString().trimmed();
+        if (obj.contains("icon"))     item.icon     = obj["icon"].toString().trimmed();
     } else if (obj.contains("submenu")) {
         // Submenu navigation item
         item.submenuName = obj["submenu"].toString().trimmed();
