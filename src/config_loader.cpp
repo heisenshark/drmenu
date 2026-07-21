@@ -53,6 +53,10 @@ static MenuItem itemFromJson(const QJsonObject &obj) {
         item.command  = obj["command"].toString().trimmed();
     }
 
+    if (obj.contains("key")) {
+        item.key = obj["key"].toString().trimmed();
+    }
+
     return item;
 }
 

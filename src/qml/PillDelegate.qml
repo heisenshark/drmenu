@@ -10,6 +10,7 @@ Item {
     required property string iconName
     required property string command
     required property string submenuName
+    required property string key
 
     property var rootRef: root
     property var menuContainerRef: menuContainer
@@ -61,6 +62,20 @@ Item {
             id: pillRow
             anchors.centerIn: parent
             spacing: 7
+
+            Text {
+                visible: rootRef.s.showNumberBadges !== false
+                text: (pillDelegate.key && pillDelegate.key !== "")
+                    ? pillDelegate.key.toUpperCase()
+                    : (pillDelegate.index < 9 ? (pillDelegate.index + 1) : (pillDelegate.index === 9 ? "0" : ""))
+                font.family: rootRef.s.fontFamily || "Sans"
+                font.pixelSize: Math.max(9, (rootRef.s.fontSize || 13) - 3)
+                font.bold: true
+                color: pillDelegate.isHovered
+                       ? (rootRef.s.accentColor || "#e67e22")
+                       : (rootRef.s.numberBadgeColor || "#686878")
+                anchors.verticalCenter: parent.verticalCenter
+            }
 
             Image {
                 visible: pillDelegate.hasXdgIcon

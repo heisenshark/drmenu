@@ -12,6 +12,7 @@ Item {
     required property string iconName
     required property string command
     required property string submenuName
+    required property string key
 
     property var rootRef: root
     property var menuContainerRef: menuContainer
@@ -109,6 +110,20 @@ Item {
             id: pieRow
             spacing: 6
             anchors.centerIn: parent
+
+            Text {
+                visible: rootRef.s.showNumberBadges !== false
+                text: (pieSectorDelegate.key && pieSectorDelegate.key !== "")
+                    ? pieSectorDelegate.key.toUpperCase()
+                    : (pieSectorDelegate.index < 9 ? (pieSectorDelegate.index + 1) : (pieSectorDelegate.index === 9 ? "0" : ""))
+                font.family: rootRef.s.fontFamily || "Sans"
+                font.pixelSize: Math.max(9, (rootRef.s.fontSize || 13) - 3)
+                font.bold: true
+                color: pieSectorDelegate.isHovered
+                       ? (rootRef.s.accentColor || "#3b82f6")
+                       : (rootRef.s.numberBadgeColor || "#686878")
+                anchors.verticalCenter: parent.verticalCenter
+            }
 
             Image {
                 visible: pieSectorDelegate.hasXdgIcon

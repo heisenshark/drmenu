@@ -160,7 +160,8 @@ ApplicationWindow {
                 icon:        e.icon        || "",
                 iconName:    e.iconName    || "",
                 command:     e.command     || "",
-                submenuName: e.submenuName || ""
+                submenuName: e.submenuName || "",
+                key:         e.key         || ""
             })
         }
         menuContainer.hoveredIndex = -1
@@ -239,11 +240,51 @@ ApplicationWindow {
         anchors.fill: parent
         opacity: 0
         scale: 0.92
-        focus: true
+        function selectByIndex(numIdx) {
+            if (numIdx >= 0 && numIdx < menuContainer.itemCount) {
+                let item = menuModel.get(numIdx)
+                if (item.submenuName !== "") {
+                    root.navigateTo(item.submenuName)
+                } else {
+                    root.triggerSelect(item.label)
+                }
+            }
+        }
 
         Keys.onPressed: (event) => {
             if (event.key === Qt.Key_Escape) {
                 root.handleEscape()
+                event.accepted = true
+                return
+            }
+
+            // 1. Check if any item has an explicit custom hotkey matching pressed key text
+            let pressedKeyText = event.text ? event.text.toLowerCase() : ""
+            if (pressedKeyText !== "") {
+                for (let i = 0; i < menuContainer.itemCount; ++i) {
+                    let item = menuModel.get(i)
+                    if (item.key && item.key.toLowerCase() === pressedKeyText) {
+                        menuContainer.selectByIndex(i)
+                        event.accepted = true
+                        return
+                    }
+                }
+            }
+
+            // 2. Fallback to number key 1-0 indexing
+            let idx = -1
+            if (event.key >= Qt.Key_1 && event.key <= Qt.Key_9) {
+                idx = event.key - Qt.Key_1
+            } else if (event.key === Qt.Key_0) {
+                idx = 9
+            } else if (event.key >= Qt.Key_Numpad1 && event.key <= Qt.Key_Numpad9) {
+                idx = event.key - Qt.Key_Numpad1
+            } else if (event.key === Qt.Key_Numpad0) {
+                idx = 9
+            }
+
+            if (idx >= 0 && idx < menuContainer.itemCount) {
+                menuContainer.selectByIndex(idx)
                 event.accepted = true
             }
         }

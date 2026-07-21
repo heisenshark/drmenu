@@ -34,6 +34,7 @@ static QVariantList jsonArrayToVariantList(const QJsonArray &arr) {
             itemMap["iconName"]    = obj["iconName"].toString();
             itemMap["command"]     = obj["command"].toString();
             itemMap["submenuName"] = obj["submenuName"].toString();
+            itemMap["key"]         = obj["key"].toString();
             if (!itemMap["label"].toString().isEmpty()) {
                 list.append(itemMap);
             }
