@@ -1,4 +1,10 @@
-{ pkgs, lib, config, inputs, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  inputs,
+  ...
+}:
 
 let
   # Bundle Qt6 libraries into a single environment package to simplify paths
@@ -8,7 +14,8 @@ let
     pkgs.qt6.qtsvg
     pkgs.kdePackages.layer-shell-qt
   ];
-in {
+in
+{
   # https://devenv.sh/packages/
   packages = [
     qtEnv
@@ -28,7 +35,7 @@ in {
   # Set critical environment variables for running the Qt app during development
   env.QT_PLUGIN_PATH = "${qtEnv}/${pkgs.qt6.qtbase.qtPluginPrefix}";
   env.QML2_IMPORT_PATH = "${qtEnv}/${pkgs.qt6.qtbase.qtQmlPrefix}";
-  
+
   # Default platform plugins (falls back to xcb if Wayland is not running)
   env.QT_QPA_PLATFORM = "wayland;xcb";
 
@@ -42,4 +49,3 @@ in {
     echo "=================================================="
   '';
 }
-
