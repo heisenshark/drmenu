@@ -132,28 +132,14 @@ bool ClientRunner::tryRunMenus(const QVariantMap &allMenus, const QString &initi
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    QJsonObject menusJson;
-    for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
-        QVariant val = it.value();
-        if (val.typeId() == QMetaType::QVariantMap) {
-            menusJson[it.key()] = menuMapToJsonObject(val.toMap());
-        } else {
-            menusJson[it.key()] = variantListToJsonArray(val.toList());
-        }
-    }
-
     QJsonObject payload;
-    payload["type"]            = "menus";
-    payload["menus"]           = menusJson;
-    payload["initialMenu"]     = initialMenu;
-    payload["spawnAtMouse"]    = spawnAtMouse;
-    payload["escapeClosesAll"]  = escapeClosesAll;
-    if (!style.isEmpty())
-        payload["style"] = QJsonObject::fromVariantMap(style);
+    payload["type"] = "show";
+    payload["menu"] = initialMenu;
 
     socket.write(QJsonDocument(payload).toJson(QJsonDocument::Compact) + "\n");
     socket.flush();
 
-    waitForResponse(socket, buildCommandMap(allMenus), t_start);
+    QMap<QString, QString> cmdMap = buildCommandMap(allMenus);
+    waitForResponse(socket, cmdMap, t_start);
     return true;
 }

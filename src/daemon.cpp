@@ -1,5 +1,6 @@
 #include "daemon.h"
 #include "cli_parser.h"
+#include "config_loader.h"
 #include "screen_detector.h"
 #include "output_controller.h"
 #include "theme_icon_provider.h"
@@ -17,6 +18,9 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonParseError>
+#include <QFileSystemWatcher>
+#include <QDir>
+#include <QFile>
 
 #include <LayerShellQt/Window>
 #include <chrono>
@@ -106,6 +110,7 @@ int DaemonServer::run(int argc, char *argv[]) {
                 LayerShellQt::Window::AnchorRight));
             layerWindow->setExclusiveZone(-1);
         }
+        window->create();
     }, Qt::QueuedConnection);
 
     engine.addImageProvider(QStringLiteral("icon"), new ThemeIconProvider);
@@ -159,13 +164,26 @@ int DaemonServer::run(int argc, char *argv[]) {
         activeCommandMap.clear();
     };
 
+    QVariantMap cachedAllMenus = ConfigLoader::loadAllMenus("");
+    QFileSystemWatcher configWatcher;
+    QString userConfigPath = QDir::homePath() + "/.config/drmenu/config.json";
+    if (QFile::exists(userConfigPath)) {
+        configWatcher.addPath(userConfigPath);
+        QObject::connect(&configWatcher, &QFileSystemWatcher::fileChanged, [&cachedAllMenus, userConfigPath, &configWatcher]() {
+            cachedAllMenus = ConfigLoader::loadAllMenus("");
+            if (QFile::exists(userConfigPath) && !configWatcher.files().contains(userConfigPath)) {
+                configWatcher.addPath(userConfigPath);
+            }
+        });
+    }
+
     QObject::connect(&server, &QLocalServer::newConnection, [&]() {
         QLocalSocket *clientSocket = server.nextPendingConnection();
         if (!clientSocket) return;
 
         QObject::connect(clientSocket, &QLocalSocket::readyRead,
                          [clientSocket, &window, &output, &activeClientSocket,
-                          &activeCommandMap, &buildCommandMap]() {
+                          &activeCommandMap, &buildCommandMap, &cachedAllMenus]() {
             auto t_start = std::chrono::high_resolution_clock::now();
 
             // If a menu is already active, cancel the previous client
@@ -197,7 +215,28 @@ int DaemonServer::run(int argc, char *argv[]) {
                 if (payload.contains("style"))
                     reqStyle = payload["style"].toObject().toVariantMap();
 
-                if (type == "menus") {
+                if (type == "show") {
+                    QString initial = payload["menu"].toString();
+                    if (initial.isEmpty()) initial = payload["initialMenu"].toString();
+
+                    if (cachedAllMenus.isEmpty()) {
+                        cachedAllMenus = ConfigLoader::loadAllMenus("");
+                    }
+
+                    if (cachedAllMenus.contains(initial)) {
+                        ConfigLoader::MenuOptions opts = ConfigLoader::loadMenuOptions(initial, "");
+                        QVariantMap mStyle = reqStyle.isEmpty() ? ConfigLoader::loadStyle(initial, "") : reqStyle;
+
+                        activeClientSocket = clientSocket;
+                        activeCommandMap   = buildCommandMap(cachedAllMenus);
+                        output.setMenuData(cachedAllMenus, initial, opts.spawnAtMouse, opts.escapeClosesAll, mStyle);
+                        spawnAtMouse = opts.spawnAtMouse;
+                    } else {
+                        clientSocket->write("CANCELLED\n");
+                        clientSocket->close();
+                        return;
+                    }
+                } else if (type == "menus") {
                     QVariantMap allMenus;
                     QJsonObject menusObj = payload["menus"].toObject();
                     for (const QString &key : menusObj.keys()) {

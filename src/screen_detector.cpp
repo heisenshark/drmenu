@@ -1,25 +1,41 @@
 #include "screen_detector.h"
-#include <QProcess>
-#include <QByteArray>
-#include <QStringList>
+#include <QLocalSocket>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QCursor>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QDebug>
+#include <unistd.h>
+
+static QString queryHyprlandSocket(const QString &cmd) {
+    QString sig = qgetenv("HYPRLAND_INSTANCE_SIGNATURE");
+    if (sig.isEmpty()) return {};
+
+    QString xdgRuntime = qgetenv("XDG_RUNTIME_DIR");
+    if (xdgRuntime.isEmpty()) xdgRuntime = "/run/user/" + QString::number(getuid());
+
+    QString socketPath = xdgRuntime + "/hypr/" + sig + "/.socket.sock";
+    QLocalSocket socket;
+    socket.connectToServer(socketPath);
+    if (!socket.waitForConnected(50)) return {};
+
+    socket.write(cmd.toUtf8());
+    socket.flush();
+
+    if (!socket.waitForReadyRead(50)) return {};
+
+    return QString::fromUtf8(socket.readAll()).trimmed();
+}
 
 TargetScreenInfo ScreenDetector::getTargetScreenInfo() {
     TargetScreenInfo info;
 
     int cx = -1, cy = -1;
 
-    // 1. Try hyprctl cursorpos
-    QProcess cursorProc;
-    cursorProc.start("hyprctl", {"cursorpos"});
-    if (cursorProc.waitForFinished(1000) && cursorProc.exitCode() == 0) {
-        QString cursorOut = QString::fromUtf8(cursorProc.readAllStandardOutput()).trimmed();
+    // 1. Try Hyprland IPC socket (direct socket read, <0.2ms, no QProcess fork)
+    QString cursorOut = queryHyprlandSocket("cursorpos");
+    if (!cursorOut.isEmpty()) {
         QStringList parts = cursorOut.split(',');
         if (parts.size() >= 2) {
             bool okX = false, okY = false;
@@ -39,13 +55,11 @@ TargetScreenInfo ScreenDetector::getTargetScreenInfo() {
         cy = gpos.y();
     }
 
-    // 2. Try hyprctl monitors -j
-    QProcess monitorsProc;
-    monitorsProc.start("hyprctl", {"monitors", "-j"});
-    if (monitorsProc.waitForFinished(1000) && monitorsProc.exitCode() == 0) {
-        QByteArray jsonBytes = monitorsProc.readAllStandardOutput();
+    // 2. Try Hyprland IPC monitors
+    QString monitorsOut = queryHyprlandSocket("j/monitors");
+    if (!monitorsOut.isEmpty()) {
         QJsonParseError jsonErr;
-        QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &jsonErr);
+        QJsonDocument doc = QJsonDocument::fromJson(monitorsOut.toUtf8(), &jsonErr);
         if (jsonErr.error == QJsonParseError::NoError && doc.isArray()) {
             QJsonArray monitorList = doc.array();
             for (const QJsonValue &val : monitorList) {
@@ -68,7 +82,7 @@ TargetScreenInfo ScreenDetector::getTargetScreenInfo() {
                 }
             }
 
-            // If cursor wasn't inside explicit bounds, pick the first monitor
+            // Fallback to first monitor if cursor not within bounds
             if (!monitorList.isEmpty() && monitorList[0].isObject()) {
                 QJsonObject mon = monitorList[0].toObject();
                 info.monitorName = mon["name"].toString();
