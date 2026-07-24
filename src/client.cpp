@@ -56,7 +56,20 @@ static QMap<QString, QString> buildCommandMap(const QVariantMap &allMenus) {
 static void waitForResponse(QLocalSocket &socket,
                              const QMap<QString, QString> &commandMap,
                              std::chrono::high_resolution_clock::time_point t_start) {
-    if (!socket.waitForReadyRead(30000)) return;
+    // Poll with short timeouts, checking for disconnect between polls
+    constexpr int totalTimeoutMs = 30000;
+    constexpr int pollMs = 100;
+    int elapsed = 0;
+
+    while (elapsed < totalTimeoutMs) {
+        if (socket.state() != QLocalSocket::ConnectedState)
+            break;
+        if (socket.waitForReadyRead(pollMs))
+            break;
+        elapsed += pollMs;
+    }
+
+    if (socket.bytesAvailable() == 0) return;
 
     QByteArray response = socket.readAll().trimmed();
     QString respStr = QString::fromUtf8(response);

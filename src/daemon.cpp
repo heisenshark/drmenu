@@ -137,7 +137,7 @@ int DaemonServer::run(int argc, char *argv[]) {
         if (activeClientSocket && activeClientSocket->isOpen()) {
             activeClientSocket->write(("SELECTED\t" + label + "\n").toUtf8());
             activeClientSocket->flush();
-            activeClientSocket->disconnectFromServer();
+            activeClientSocket->close();
             activeClientSocket = nullptr;
         } else {
             auto it = activeCommandMap.find(label);
@@ -152,7 +152,7 @@ int DaemonServer::run(int argc, char *argv[]) {
         if (activeClientSocket && activeClientSocket->isOpen()) {
             activeClientSocket->write("CANCELLED\n");
             activeClientSocket->flush();
-            activeClientSocket->disconnectFromServer();
+            activeClientSocket->close();
             activeClientSocket = nullptr;
         }
         if (window) window->setVisible(false);
@@ -167,6 +167,18 @@ int DaemonServer::run(int argc, char *argv[]) {
                          [clientSocket, &window, &output, &activeClientSocket,
                           &activeCommandMap, &buildCommandMap]() {
             auto t_start = std::chrono::high_resolution_clock::now();
+
+            // If a menu is already active, cancel the previous client
+            if (activeClientSocket && activeClientSocket != clientSocket) {
+                if (activeClientSocket->isOpen()) {
+                    activeClientSocket->write("CANCELLED\n");
+                    activeClientSocket->flush();
+                    activeClientSocket->close();
+                }
+                activeClientSocket = nullptr;
+                activeCommandMap.clear();
+                if (window) window->setVisible(false);
+            }
 
             QByteArray data = clientSocket->readAll();
             QString rawInput = QString::fromUtf8(data).trimmed();
@@ -202,7 +214,7 @@ int DaemonServer::run(int argc, char *argv[]) {
                     QString initial = payload["initialMenu"].toString();
                     if (allMenus.isEmpty() || initial.isEmpty()) {
                         clientSocket->write("CANCELLED\n");
-                        clientSocket->disconnectFromServer();
+                        clientSocket->close();
                         return;
                     }
 
@@ -225,7 +237,7 @@ int DaemonServer::run(int argc, char *argv[]) {
                     }
                     if (items.isEmpty()) {
                         clientSocket->write("CANCELLED\n");
-                        clientSocket->disconnectFromServer();
+                        clientSocket->close();
                         return;
                     }
                     activeClientSocket = clientSocket;
@@ -242,7 +254,7 @@ int DaemonServer::run(int argc, char *argv[]) {
                         items.append(CliParser::parseEntry(line));
                 if (items.isEmpty()) {
                     clientSocket->write("CANCELLED\n");
-                    clientSocket->disconnectFromServer();
+                    clientSocket->close();
                     return;
                 }
                 activeClientSocket = clientSocket;

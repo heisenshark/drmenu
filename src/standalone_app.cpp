@@ -11,11 +11,22 @@
 #include <QScreen>
 #include <QTextStream>
 #include <QProcess>
-#include <chrono>
+#include <QLockFile>
+#include <QDir>
+#include <csignal>
 
 #include <LayerShellQt/Window>
 
 static int runInternal(int argc, char *argv[], OutputController &output, bool spawnAtMouse) {
+    QString lockPath = QDir::tempPath() + "/drmenu-standalone.lock";
+    QLockFile lockFile(lockPath);
+    lockFile.setStaleLockTime(5000);
+
+    if (!lockFile.tryLock(50)) {
+        // Another instance is already open; disable creating a new one
+        return 0;
+    }
+
     auto t_start = std::chrono::high_resolution_clock::now();
 
     if (!qgetenv("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
