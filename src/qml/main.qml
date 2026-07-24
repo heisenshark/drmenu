@@ -180,6 +180,10 @@ ApplicationWindow {
             updatePositionForMenu(initData, true)
             if (initData.style) output.setStyle(initData.style)
 
+            if (menuStack.length === 1 && menuStack[0] === output.initialMenu && menuModel.count === items.length) {
+                return
+            }
+
             menuStack = [output.initialMenu]
             hasParent = false
             loadItems(items)

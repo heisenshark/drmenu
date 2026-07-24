@@ -21,6 +21,7 @@
 #include <QFileSystemWatcher>
 #include <QDir>
 #include <QFile>
+#include <QTimer>
 
 #include <LayerShellQt/Window>
 #include <chrono>
@@ -109,16 +110,14 @@ int DaemonServer::run(int argc, char *argv[]) {
                 LayerShellQt::Window::AnchorLeft   |
                 LayerShellQt::Window::AnchorRight));
             layerWindow->setExclusiveZone(-1);
+            QScreen *pri = QGuiApplication::primaryScreen();
+            if (pri) layerWindow->setScreen(pri);
         }
         window->create();
     }, Qt::QueuedConnection);
 
     engine.addImageProvider(QStringLiteral("icon"), new ThemeIconProvider);
     engine.load(url);
-
-    QLocalSocket *activeClientSocket = nullptr;
-    QMap<QString, QString> activeCommandMap;
-
     auto buildCommandMap = [](const QVariantMap &allMenus) {
         QMap<QString, QString> map;
         for (auto it = allMenus.cbegin(); it != allMenus.cend(); ++it) {
@@ -137,6 +136,32 @@ int DaemonServer::run(int argc, char *argv[]) {
         }
         return map;
     };
+
+    QVariantMap cachedAllMenus = ConfigLoader::loadAllMenus("");
+    QMap<QString, QString> cachedCommandMap = buildCommandMap(cachedAllMenus);
+
+    if (!cachedAllMenus.isEmpty()) {
+        QString initialMenu = cachedAllMenus.contains("main") ? "main" : cachedAllMenus.keys().first();
+        QVariantMap mData    = cachedAllMenus[initialMenu].toMap();
+        bool spawnAtMouse    = mData.contains("spawnAtMouse")    ? mData["spawnAtMouse"].toBool()    : true;
+        bool escapeClosesAll = mData.contains("escapeClosesAll") ? mData["escapeClosesAll"].toBool() : false;
+        QVariantMap style    = mData["style"].toMap();
+        output.setMenuData(cachedAllMenus, initialMenu, spawnAtMouse, escapeClosesAll, style);
+    }
+
+    // Force GPU EGL surface & Wayland layer-shell pre-warm on daemon startup
+    QTimer::singleShot(150, [&window]() {
+        if (window) {
+            QObject::connect(window, &QQuickWindow::afterRendering, window, [window]() {
+                window->setVisible(false);
+                QTextStream(stderr) << "[PRE-WARM] GPU shaders, Wayland surface & EGL context ready!\n";
+            }, Qt::SingleShotConnection);
+            window->setVisible(true);
+        }
+    });
+
+    QLocalSocket *activeClientSocket = nullptr;
+    QMap<QString, QString> activeCommandMap;
 
     output.onSelectCallback = [&activeClientSocket, &window, &activeCommandMap](const QString &label) {
         if (activeClientSocket && activeClientSocket->isOpen()) {
@@ -164,13 +189,13 @@ int DaemonServer::run(int argc, char *argv[]) {
         activeCommandMap.clear();
     };
 
-    QVariantMap cachedAllMenus = ConfigLoader::loadAllMenus("");
     QFileSystemWatcher configWatcher;
     QString userConfigPath = QDir::homePath() + "/.config/drmenu/config.json";
     if (QFile::exists(userConfigPath)) {
         configWatcher.addPath(userConfigPath);
-        QObject::connect(&configWatcher, &QFileSystemWatcher::fileChanged, [&cachedAllMenus, userConfigPath, &configWatcher]() {
-            cachedAllMenus = ConfigLoader::loadAllMenus("");
+        QObject::connect(&configWatcher, &QFileSystemWatcher::fileChanged, [&cachedAllMenus, &cachedCommandMap, userConfigPath, &configWatcher, &buildCommandMap]() {
+            cachedAllMenus   = ConfigLoader::loadAllMenus("");
+            cachedCommandMap = buildCommandMap(cachedAllMenus);
             if (QFile::exists(userConfigPath) && !configWatcher.files().contains(userConfigPath)) {
                 configWatcher.addPath(userConfigPath);
             }
@@ -183,7 +208,7 @@ int DaemonServer::run(int argc, char *argv[]) {
 
         QObject::connect(clientSocket, &QLocalSocket::readyRead,
                          [clientSocket, &window, &output, &activeClientSocket,
-                          &activeCommandMap, &buildCommandMap, &cachedAllMenus]() {
+                          &activeCommandMap, &buildCommandMap, &cachedAllMenus, &cachedCommandMap]() {
             auto t_start = std::chrono::high_resolution_clock::now();
 
             // If a menu is already active, cancel the previous client
@@ -203,6 +228,8 @@ int DaemonServer::run(int argc, char *argv[]) {
 
             QJsonParseError jsonErr;
             QJsonDocument doc = QJsonDocument::fromJson(data, &jsonErr);
+            auto t_json = std::chrono::high_resolution_clock::now();
+
             bool spawnAtMouse = true;
             QVariantMap reqStyle;
 
@@ -220,17 +247,19 @@ int DaemonServer::run(int argc, char *argv[]) {
                     if (initial.isEmpty()) initial = payload["initialMenu"].toString();
 
                     if (cachedAllMenus.isEmpty()) {
-                        cachedAllMenus = ConfigLoader::loadAllMenus("");
+                        cachedAllMenus   = ConfigLoader::loadAllMenus("");
+                        cachedCommandMap = buildCommandMap(cachedAllMenus);
                     }
 
                     if (cachedAllMenus.contains(initial)) {
-                        ConfigLoader::MenuOptions opts = ConfigLoader::loadMenuOptions(initial, "");
-                        QVariantMap mStyle = reqStyle.isEmpty() ? ConfigLoader::loadStyle(initial, "") : reqStyle;
+                        QVariantMap mData    = cachedAllMenus[initial].toMap();
+                        spawnAtMouse         = mData.contains("spawnAtMouse")    ? mData["spawnAtMouse"].toBool()    : true;
+                        bool escapeClosesAll = mData.contains("escapeClosesAll") ? mData["escapeClosesAll"].toBool() : false;
+                        QVariantMap mStyle   = reqStyle.isEmpty() ? mData["style"].toMap() : reqStyle;
 
                         activeClientSocket = clientSocket;
-                        activeCommandMap   = buildCommandMap(cachedAllMenus);
-                        output.setMenuData(cachedAllMenus, initial, opts.spawnAtMouse, opts.escapeClosesAll, mStyle);
-                        spawnAtMouse = opts.spawnAtMouse;
+                        activeCommandMap   = cachedCommandMap;
+                        output.setMenuData(cachedAllMenus, initial, spawnAtMouse, escapeClosesAll, mStyle);
                     } else {
                         clientSocket->write("CANCELLED\n");
                         clientSocket->close();
@@ -302,12 +331,16 @@ int DaemonServer::run(int argc, char *argv[]) {
                 output.setItems(CliParser::buildModel(items), reqStyle);
             }
 
+            auto t_model = std::chrono::high_resolution_clock::now();
+
             // Position the window
             if (window) {
                 auto layerWindow = LayerShellQt::Window::get(window);
                 TargetScreenInfo targetInfo = spawnAtMouse
                     ? ScreenDetector::getTargetScreenInfo()
                     : TargetScreenInfo{};
+
+                auto t_screen = std::chrono::high_resolution_clock::now();
 
                 QScreen *targetScreen = nullptr;
                 if (!targetInfo.monitorName.isEmpty()) {
@@ -317,7 +350,9 @@ int DaemonServer::run(int argc, char *argv[]) {
                 }
                 if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
 
-                if (layerWindow && targetScreen) layerWindow->setScreen(targetScreen);
+                if (layerWindow && targetScreen && layerWindow->screen() != targetScreen) {
+                    layerWindow->setScreen(targetScreen);
+                }
 
                 if (targetScreen) {
                     int localX = targetInfo.localX < 0 ? targetScreen->geometry().width()  / 2 : targetInfo.localX;
@@ -329,11 +364,29 @@ int DaemonServer::run(int argc, char *argv[]) {
                 window->setVisible(true);
                 window->raise();
                 window->requestActivate();
-            }
 
-            auto t_end = std::chrono::high_resolution_clock::now();
-            double ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
-            qDebug() << "[drmenu daemon] popup in:" << ms << "ms";
+                auto t_visible = std::chrono::high_resolution_clock::now();
+
+                double ms_json   = std::chrono::duration<double, std::milli>(t_json - t_start).count();
+                double ms_model  = std::chrono::duration<double, std::milli>(t_model - t_json).count();
+                double ms_screen = std::chrono::duration<double, std::milli>(t_screen - t_model).count();
+                double ms_vis    = std::chrono::duration<double, std::milli>(t_visible - t_screen).count();
+                double ms_total  = std::chrono::duration<double, std::milli>(t_visible - t_start).count();
+
+                QTextStream(stderr) << QString("[TIMING] JSON Parse: %1 ms | QML Model Update: %2 ms | ScreenDetect: %3 ms | SetVisible: %4 ms | Total C++: %5 ms\n")
+                    .arg(ms_json, 0, 'f', 3)
+                    .arg(ms_model, 0, 'f', 3)
+                    .arg(ms_screen, 0, 'f', 3)
+                    .arg(ms_vis, 0, 'f', 3)
+                    .arg(ms_total, 0, 'f', 3);
+
+                QObject::connect(window, &QQuickWindow::afterRendering, window, [t_start]() {
+                    auto t_render = std::chrono::high_resolution_clock::now();
+                    double ms_render = std::chrono::duration<double, std::milli>(t_render - t_start).count();
+                    QTextStream(stderr) << QString("[TIMING] First Frame Rendered on Screen: %1 ms\n")
+                        .arg(ms_render, 0, 'f', 3);
+                }, Qt::SingleShotConnection);
+            }
         });
     });
 
