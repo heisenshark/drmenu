@@ -205,6 +205,8 @@ ApplicationWindow {
             }
 
             loadItems(output.items)
+            menuContainer.opacity = 1.0
+            openAnimation.start()
         }
     }
 

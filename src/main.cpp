@@ -32,12 +32,13 @@ int main(int argc, char *argv[]) {
         return StandaloneApp::run(argc, argv, allMenus, args.menuName, opts.spawnAtMouse, opts.escapeClosesAll, initialStyle);
     }
 
-    // Inline / stdin mode
+    // Inline / media / stdin mode
     if (args.items.isEmpty()) {
         QTextStream(stderr) << "drmenu: no items provided.\n"
                             << "Usage:\n"
                             << "  drmenu --daemon                      (start background daemon)\n"
                             << "  drmenu --menu <name>                 (launch a named menu from config)\n"
+                            << "  drmenu --media                       (launch dynamic MPRIS media sources menu)\n"
                             << "  drmenu --menu <name> --config <path> (use a custom config file)\n"
                             << "  echo -e 'Item1\\nItem2' | drmenu     (stdin, dmenu style)\n";
         return 1;

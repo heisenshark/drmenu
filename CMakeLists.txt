@@ -59,3 +59,6 @@ target_link_libraries(drmenu PRIVATE
     Qt6::Network
     LayerShellQt::Interface
 )
+
+install(TARGETS drmenu RUNTIME DESTINATION bin)
+install(PROGRAMS scripts/drmenu-media DESTINATION bin)

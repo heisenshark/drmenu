@@ -33,12 +33,7 @@ stdenv.mkDerivation {
     "-DCMAKE_BUILD_TYPE=Release"
   ];
 
-  # The binary is placed in bin/ subdirectory by CMakeLists.txt
-  installPhase = ''
-    runHook preInstall
-    install -Dm755 bin/drmenu $out/bin/drmenu
-    runHook postInstall
-  '';
+
 
   meta = with lib; {
     description = "A radial/pie menu launcher for Wayland compositors";

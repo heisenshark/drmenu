@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+# Fetch all active MPRIS player names
+players=$(playerctl -l 2>/dev/null)
+
+items=""
+count=1
+
+if [ -n "$players" ]; then
+    for p in $players; do
+        status=$(playerctl -p "$p" status 2>/dev/null || echo "Unknown")
+        meta=$(playerctl -p "$p" metadata 2>/dev/null || echo "")
+        bus_info=$(busctl --user list 2>/dev/null | grep "$p" || echo "")
+        combined=$(echo "$p $meta $bus_info" | tr '[:upper:]' '[:lower:]')
+
+        symbol="⏸"
+        [ "$status" = "Playing" ] && symbol="▶"
+
+        app_name="Media Player"
+        icon="🎵"
+        icon_name=""
+
+        if echo "$combined" | grep -q "zen"; then
+            app_name="Zen Browser"; icon="🌐"; icon_name="zen-browser"
+        elif echo "$combined" | grep -q "librewolf"; then
+            app_name="LibreWolf"; icon="🐺"; icon_name="io.gitlab.librewolf-community"
+        elif echo "$combined" | grep -q "waterfox"; then
+            app_name="Waterfox"; icon="🦊"; icon_name="waterfox"
+        elif echo "$combined" | grep -q "floorp"; then
+            app_name="Floorp"; icon="🌀"; icon_name="floorp"
+        elif echo "$combined" | grep -q "firefox"; then
+            app_name="Firefox"; icon="🦊"; icon_name="firefox"
+        elif echo "$combined" | grep -q "spotify"; then
+            app_name="Spotify"; icon="🟢"; icon_name="spotify"
+        elif echo "$combined" | grep -q "chrome" || echo "$combined" | grep -q "chromium"; then
+            app_name="Chrome"; icon="🌐"; icon_name="google-chrome"
+        elif echo "$combined" | grep -q "mpv"; then
+            app_name="mpv"; icon="🎬"; icon_name="mpv"
+        elif echo "$combined" | grep -q "vlc"; then
+            app_name="VLC"; icon="🟧"; icon_name="vlc"
+        else
+            app_name=$(echo "$p" | cut -d'.' -f1)
+        fi
+
+        label="$app_name [$symbol]"
+
+        key=""
+        if [ $count -le 9 ]; then
+            key="$count"
+        fi
+
+        # Format: label\tcommand\ticon\ticonName\tkey
+        line="${label}\tplayerctl -p '$p' play-pause\t${icon}\t${icon_name}\t${key}"
+        items="${items}${line}\n"
+        count=$((count + 1))
+    done
+fi
+
+# Add global control fallback options
+items="${items}Global Play/Pause\tplayerctl play-pause\t⏯\t\tp\n"
+items="${items}Next Track\tplayerctl next\t⏭\t\tn\n"
+items="${items}Previous Track\tplayerctl previous\t⏮\t\tr\n"
+
+echo -e "$items"

@@ -163,16 +163,27 @@ int DaemonServer::run(int argc, char *argv[]) {
     QLocalSocket *activeClientSocket = nullptr;
     QMap<QString, QString> activeCommandMap;
 
-    output.onSelectCallback = [&activeClientSocket, &window, &activeCommandMap](const QString &label) {
+    output.onSelectCallback = [&activeClientSocket, &window, &activeCommandMap, &output](const QString &label) {
+        auto it = activeCommandMap.find(label);
+        if (it != activeCommandMap.end() && it.value() == "drmenu --media") {
+            // In-place dynamic transition: fetch media sources instantly without closing window or dropping Wayland focus!
+            QList<MenuItem> mediaItems = CliParser::getMediaItems();
+            activeCommandMap.clear();
+            for (const MenuItem &item : mediaItems)
+                if (!item.command.isEmpty()) activeCommandMap[item.label] = item.command;
+            output.setItems(CliParser::buildModel(mediaItems), QVariantMap{});
+            return;
+        }
+
+        if (it != activeCommandMap.end()) {
+            QProcess::startDetached("sh", {"-c", it.value()});
+        }
+
         if (activeClientSocket && activeClientSocket->isOpen()) {
             activeClientSocket->write(("SELECTED\t" + label + "\n").toUtf8());
             activeClientSocket->flush();
             activeClientSocket->close();
             activeClientSocket = nullptr;
-        } else {
-            auto it = activeCommandMap.find(label);
-            if (it != activeCommandMap.end())
-                QProcess::startDetached("sh", {"-c", it.value()});
         }
         if (window) window->setVisible(false);
         activeCommandMap.clear();
@@ -301,6 +312,7 @@ int DaemonServer::run(int argc, char *argv[]) {
                         it.iconName    = obj["iconName"].toString();
                         it.command     = obj["command"].toString();
                         it.submenuName = obj["submenuName"].toString();
+                        it.key         = obj["key"].toString();
                         if (!it.label.isEmpty()) items.append(it);
                     }
                     if (items.isEmpty()) {
