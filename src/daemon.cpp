@@ -175,16 +175,22 @@ int DaemonServer::run(int argc, char *argv[]) {
             return;
         }
 
-        if (it != activeCommandMap.end()) {
-            QProcess::startDetached("sh", {"-c", it.value()});
-        }
-
-        if (activeClientSocket && activeClientSocket->isOpen()) {
+        bool hasClient = (activeClientSocket && activeClientSocket->isOpen());
+        if (hasClient) {
             activeClientSocket->write(("SELECTED\t" + label + "\n").toUtf8());
             activeClientSocket->flush();
             activeClientSocket->close();
             activeClientSocket = nullptr;
         }
+
+        // Execute in daemon ONLY if no active client socket or if it's a dynamic item (e.g. playerctl)
+        if (it != activeCommandMap.end()) {
+            bool isDynamicItem = it.value().startsWith("playerctl");
+            if (!hasClient || isDynamicItem) {
+                QProcess::startDetached("sh", {"-c", it.value()});
+            }
+        }
+
         if (window) window->setVisible(false);
         activeCommandMap.clear();
     };
