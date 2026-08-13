@@ -10,3 +10,10 @@ devenv.local.yaml
 # pre-commit
 .pre-commit-config.yaml
 build/
+build-arch/
+
+# Arch Linux makepkg outputs
+pkg/
+src/
+*.pkg.tar.zst
+
