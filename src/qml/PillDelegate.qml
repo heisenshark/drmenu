@@ -104,9 +104,37 @@ Item {
 
             gradient: Gradient {
                 orientation: Gradient.Vertical
-                GradientStop { position: 0.00; color: pillDelegate.isHovered ? "#35ffffff" : "#20ffffff" }
+                GradientStop { position: 0.00; color: pillDelegate.isHovered ? "#38ffffff" : "#22ffffff" }
                 GradientStop { position: 0.40; color: "#00ffffff" }
                 GradientStop { position: 1.00; color: pillDelegate.isHovered ? "#18ffffff" : "#08ffffff" }
+            }
+
+            Behavior on opacity { NumberAnimation { duration: 60 } }
+        }
+
+        // ── Liquid Glass Multi-Spectral Rainbow Chromatic Prism Dispersion Rim ──
+        Rectangle {
+            id: chromaticRim
+            anchors.fill: parent
+            anchors.margins: pillBody.border.width
+            radius: Math.max(0, pillBody.radius - pillBody.border.width)
+            color: "transparent"
+            border.width: 1
+            visible: (rootRef.s.chromaticAberration === undefined || rootRef.s.chromaticAberration !== 0)
+            opacity: {
+                let baseOp = rootRef.s.chromaticOpacity !== undefined ? rootRef.s.chromaticOpacity : 0.70
+                return pillDelegate.isHovered ? Math.min(1.0, baseOp + 0.25) : baseOp
+            }
+            z: 0
+
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.00; color: "#8000d2ff" } // Electric Cyan / Violet
+                GradientStop { position: 0.18; color: "#6000ff88" } // Emerald / Lime
+                GradientStop { position: 0.38; color: "#00ffffff" } // Crystal Center
+                GradientStop { position: 0.62; color: "#00ffffff" } // Crystal Center
+                GradientStop { position: 0.82; color: "#65ffb000" } // Amber / Gold
+                GradientStop { position: 1.00; color: "#85ff2d55" } // Liquid Rose / Ruby
             }
 
             Behavior on opacity { NumberAnimation { duration: 60 } }
