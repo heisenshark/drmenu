@@ -2,45 +2,64 @@
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/render/OpenGL.hpp>
 #include <hyprland/src/config/ConfigManager.hpp>
+#include <hyprland/src/config/values/types/IntValue.hpp>
+#include <hyprland/src/config/values/types/FloatValue.hpp>
 #include "Shaders.hpp"
 
 inline HANDLE PHANDLE = nullptr;
 
-// Configuration options
-static Hyprlang::INT blurStrength = 1;
-static Hyprlang::FLOAT refractionStrength = 0.05f;
-static Hyprlang::FLOAT chromaticAberration = 0.012f;
-static Hyprlang::FLOAT specularStrength = 0.30f;
-static Hyprlang::FLOAT cornerRadius = 18.0f;
+struct ConfigValues {
+    SP<Config::Values::CIntValue>   blurStrength;
+    SP<Config::Values::CFloatValue> refractionStrength;
+    SP<Config::Values::CFloatValue> chromaticAberration;
+    SP<Config::Values::CFloatValue> specularStrength;
+    SP<Config::Values::CFloatValue> cornerRadius;
+};
+
+static ConfigValues g_Config;
 
 APICALL EXPORT std::string PLUGIN_API_VERSION() {
     return HYPRLAND_API_VERSION;
 }
 
+static void registerConfigValues() {
+    g_Config.blurStrength = makeShared<Config::Values::CIntValue>(
+        "plugin:liquid_glass:blur_strength", "Blur strength passes for liquid glass", 1);
+
+    g_Config.refractionStrength = makeShared<Config::Values::CFloatValue>(
+        "plugin:liquid_glass:refraction_strength", "Convex refraction intensity", 0.05f);
+
+    g_Config.chromaticAberration = makeShared<Config::Values::CFloatValue>(
+        "plugin:liquid_glass:chromatic_aberration", "Optical chromatic dispersion offset", 0.012f);
+
+    g_Config.specularStrength = makeShared<Config::Values::CFloatValue>(
+        "plugin:liquid_glass:specular_strength", "Specular Fresnel gloss intensity", 0.30f);
+
+    g_Config.cornerRadius = makeShared<Config::Values::CFloatValue>(
+        "plugin:liquid_glass:corner_radius", "Glass squircle corner radius", 18.0f);
+}
+
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
-    const std::string HASH = __hyprland_api_get_hash();
-    if (HASH != GIT_COMMIT_HASH) {
+    const std::string hyprlandHash = __hyprland_api_get_hash();
+    const std::string pluginHash   = __hyprland_api_get_client_hash();
+
+    if (hyprlandHash != pluginHash) {
         HyprlandAPI::addNotificationV2(PHANDLE, {
-            {"text", std::string("[hypr-liquid-glass] ABI Mismatch: Built with " + std::string(GIT_COMMIT_HASH) + ", running " + HASH)},
+            {"text", std::string("[hypr-liquid-glass] ABI Mismatch: Built with " + pluginHash + ", running " + hyprlandHash)},
             {"time", (uint64_t)6000},
             {"color", CHyprColor(1.0, 0.2, 0.2, 1.0)}
         });
+        throw std::runtime_error("hypr-liquid-glass: Hyprland ABI version mismatch");
     }
 
-    // Register config variables
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:liquid-glass:blur_strength", blurStrength);
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:liquid-glass:refraction_strength", refractionStrength);
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:liquid-glass:chromatic_aberration", chromaticAberration);
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:liquid-glass:specular_strength", specularStrength);
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:liquid-glass:corner_radius", cornerRadius);
+    registerConfigValues();
 
-    // Register dynamic runtime dispatchers for drmenu & apps
+    // Register runtime dispatchers
     HyprlandAPI::addDispatcherV2(PHANDLE, "liquid-glass:set_chromatic", [](std::string args) -> SDispatchResult {
         try {
             float val = std::stof(args);
-            // Dynamic chromatic aberration adjustment
             return {false, true, ""};
         } catch (...) {
             return {false, false, "Invalid argument for chromatic aberration"};
@@ -55,6 +74,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             return {false, false, "Invalid argument for refraction"};
         }
     });
+
+    HyprlandAPI::reloadConfig();
 
     HyprlandAPI::addNotificationV2(PHANDLE, {
         {"text", std::string("✨ [hypr-liquid-glass] Apple Liquid Glass & Chromatic Aberration plugin active!")},
