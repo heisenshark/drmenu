@@ -282,6 +282,8 @@ static std::vector<OverlayTriangle> readTrianglesFromFile() {
     return tris;
 }
 
+static bool g_triInitLogged = false;
+
 static void renderTriangles(PHLMONITOR pMonArg) {
     auto trisCopy = readTrianglesFromFile();
     if (trisCopy.empty()) return;
@@ -290,8 +292,6 @@ static void renderTriangles(PHLMONITOR pMonArg) {
     glGetIntegerv(GL_VIEWPORT, prevVp);
     int monW = prevVp[2] > 0 ? prevVp[2] : 1920;
     int monH = prevVp[3] > 0 ? prevVp[3] : 1080;
-
-    logToFile("renderTriangles: rendering " + std::to_string(trisCopy.size()) + " tris, viewport=" + std::to_string(monW) + "x" + std::to_string(monH));
 
     if (!g_triProgram) {
         const std::string vs = "#version 300 es\n"
@@ -317,9 +317,11 @@ static void renderTriangles(PHLMONITOR pMonArg) {
         glGenBuffers(1, &g_triVbo);
         logToFile("renderTriangles: created VAO=" + std::to_string(g_triVao) + " VBO=" + std::to_string(g_triVbo));
     }
-    if (!g_triProgram || !g_triVao) {
-        logToFile("renderTriangles: ABORT - no program or VAO");
-        return;
+    if (!g_triProgram || !g_triVao) return;
+
+    if (!g_triInitLogged) {
+        logToFile("renderTriangles: first render active with " + std::to_string(trisCopy.size()) + " tris, viewport=" + std::to_string(monW) + "x" + std::to_string(monH));
+        g_triInitLogged = true;
     }
 
     // Full OpenGL state preservation
@@ -361,8 +363,6 @@ static void renderTriangles(PHLMONITOR pMonArg) {
         float ndcX3 = (tri.x3 / (float)monW) * 2.0f - 1.0f;
         float ndcY3 = 1.0f - (tri.y3 / (float)monH) * 2.0f;
 
-        logToFile("  tri: NDC (" + std::to_string(ndcX1) + "," + std::to_string(ndcY1) + ") (" + std::to_string(ndcX2) + "," + std::to_string(ndcY2) + ") (" + std::to_string(ndcX3) + "," + std::to_string(ndcY3) + ")");
-
         vertexData.push_back(ndcX1); vertexData.push_back(ndcY1);
         vertexData.push_back(tri.r); vertexData.push_back(tri.g); vertexData.push_back(tri.b); vertexData.push_back(tri.a);
 
@@ -380,7 +380,6 @@ static void renderTriangles(PHLMONITOR pMonArg) {
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
 
     glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(trisCopy.size() * 3));
-    logToFile("renderTriangles: glDrawArrays done, " + std::to_string(trisCopy.size() * 3) + " verts");
 
     // Full state restoration
     glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
@@ -540,6 +539,28 @@ static int luaClear(lua_State* L) {
     return 1;
 }
 
+static void forceFrames() {
+    if (State::monitorState()) {
+        for (auto& mon : State::monitorState()->monitors()) {
+            if (mon && mon->m_enabled) {
+                mon->m_forceFullFrames = 4;
+                mon->scheduleFrame();
+            }
+        }
+    }
+}
+
+static SDispatchResult handleRefresh(std::string args) {
+    forceFrames();
+    return {false, true, ""};
+}
+
+static int luaRefresh(lua_State* L) {
+    forceFrames();
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static CHyprSignalListener g_renderStageListener;
 
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
@@ -565,7 +586,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     g_renderStageListener = Event::bus()->m_events.render.stage.registerListener([](std::any d) {
         try {
             eRenderStage stage = std::any_cast<eRenderStage>(d);
-            if (stage == RENDER_LAST_MOMENT) {
+            if (stage == RENDER_LAST_MOMENT || stage == RENDER_POST_WINDOWS) {
                 renderLiquidGlassPills(nullptr);
                 renderTriangles(nullptr);
             }
@@ -600,13 +621,24 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     };
     HyprlandAPI::registerHyprCtlCommand(PHANDLE, cmdClear);
 
+    SHyprCtlCommand cmdRefresh;
+    cmdRefresh.name = "liquid_glass_refresh";
+    cmdRefresh.exact = true;
+    cmdRefresh.fn = [](eHyprCtlOutputFormat format, std::string args) -> std::string {
+        forceFrames();
+        return "ok\n";
+    };
+    HyprlandAPI::registerHyprCtlCommand(PHANDLE, cmdRefresh);
+
     HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_triangles", handleTriangles);
     HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_pills", handlePills);
     HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_clear", handleClear);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_refresh", handleRefresh);
 
     HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "set_triangles", luaTriangles);
     HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "set_pills", luaPills);
     HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "clear", luaClear);
+    HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "refresh", luaRefresh);
 
     return {"hypr-liquid-glass", "Apple Liquid Glass & Vector Overlay Compositor", "drmenu", "0.1.0"};
 }

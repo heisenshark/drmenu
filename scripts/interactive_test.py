@@ -36,7 +36,7 @@ def write_triangles_file(tris):
             f.write(struct.pack("<10f", *tri))
 
 def kick_plugin():
-    send_hypr_cmd("/repl return hl.plugin.liquid_glass.clear()")
+    send_hypr_cmd("/repl return hl.plugin.liquid_glass.refresh()")
 
 def spawn_random_triangles(count=6, white_only=False):
     mon = get_focused_monitor()
