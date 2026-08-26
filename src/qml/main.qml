@@ -23,11 +23,15 @@ ApplicationWindow {
         if (visible) {
             root.raise()
             root.requestActivate()
+            root.updateGlassOptics()
             root.triggerScreenCapture()
             menuContainer.opacity = 0
             menuContainer.scale = 0.92
             openAnimation.start()
         } else {
+            if (typeof output !== "undefined") {
+                output.deactivateGlassShader()
+            }
             if (typeof screenGrabber !== "undefined") {
                 screenGrabber.stopLiveCapture()
             }
@@ -110,6 +114,7 @@ ApplicationWindow {
         menuStack = menuStack.concat([menuName])
         hasParent = menuStack.length > 1
         loadItems(targetItems)
+        root.updateGlassOptics()
         root.triggerScreenCapture()
     }
 
@@ -133,6 +138,7 @@ ApplicationWindow {
         }
 
         loadItems(parentItems)
+        root.updateGlassOptics()
         root.triggerScreenCapture()
     }
 
@@ -218,6 +224,48 @@ ApplicationWindow {
         }
     }
 
+    function updateGlassOptics() {
+        if (typeof output === "undefined") return
+        let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration : 14.0
+        let blurRad = (root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 8.0
+        let vib = (root.s.screencopyVibrancy !== undefined) ? root.s.screencopyVibrancy : 1.45
+        let refr = (root.s.lensRefraction !== undefined) ? root.s.lensRefraction : 0.008
+
+        let count = menuModel.count
+        if (count <= 0) return
+
+        let pills = []
+        let cx = menuContainer.centerX
+        let cy = menuContainer.centerY
+        let rDist = root.s.radiusDistance || 185
+        let pHalfH = (root.s.pillHeight || 46) / 2
+        let pRad = root.s.pillRadius !== undefined ? root.s.pillRadius : pHalfH
+
+        for (let i = 0; i < count; ++i) {
+            let angle = root.getItemAngleRad(i, count)
+            let px = cx + Math.cos(angle) * rDist
+            let py = cy + Math.sin(angle) * rDist
+            let pHalfW = 60.0
+            pills.push({
+                x: px,
+                y: py,
+                halfWidth: pHalfW,
+                halfHeight: pHalfH,
+                radius: pRad
+            })
+        }
+
+        pills.push({
+            x: cx,
+            y: cy,
+            halfWidth: 24.0,
+            halfHeight: 24.0,
+            radius: 24.0
+        })
+
+        output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr)
+    }
+
     function triggerScreenCapture() {
         if (typeof screenGrabber !== "undefined" && root.s && root.s.useScreencopyGlass === true) {
             let pad = Math.round(menuContainer.margin)
@@ -247,12 +295,14 @@ ApplicationWindow {
                 menuStack = [output.initialMenu]
                 hasParent = false
                 loadItems(items)
+                root.updateGlassOptics()
                 root.triggerScreenCapture()
             }
         } else if (output.items && output.items.length > 0) {
             menuStack = []
             hasParent = false
             loadItems(output.items)
+            root.updateGlassOptics()
             root.triggerScreenCapture()
         }
     }

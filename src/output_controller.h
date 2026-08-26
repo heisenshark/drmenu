@@ -37,6 +37,13 @@ public:
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void setStyle(const QVariantMap &style);
     Q_INVOKABLE QVariantMap getMousePosition();
+    Q_INVOKABLE void activateGlassShader(int screenW, int screenH, float centerX, float centerY,
+                                         const QVariantList &pills,
+                                         float chromaticAberration = 14.0f,
+                                         float blurRadius = 8.0f,
+                                         float vibrancy = 1.45f,
+                                         float refraction = 0.008f);
+    Q_INVOKABLE void deactivateGlassShader();
 
 Q_SIGNALS:
     void itemsChanged();

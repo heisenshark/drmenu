@@ -48,3 +48,30 @@ QVariantMap OutputController::getMousePosition() {
     map["y"] = info.localY;
     return map;
 }
+
+#include "hypr_shader.h"
+
+void OutputController::activateGlassShader(int screenW, int screenH, float centerX, float centerY,
+                                           const QVariantList &pillsList,
+                                           float chromaticAberration,
+                                           float blurRadius,
+                                           float vibrancy,
+                                           float refraction) {
+    QList<PillGeometry> pills;
+    for (const QVariant &v : pillsList) {
+        QVariantMap m = v.toMap();
+        PillGeometry p;
+        p.x = m["x"].toFloat();
+        p.y = m["y"].toFloat();
+        p.halfWidth = m["halfWidth"].toFloat();
+        p.halfHeight = m["halfHeight"].toFloat();
+        p.radius = m["radius"].toFloat();
+        pills.append(p);
+    }
+    HyprlandGlassShader::activate(screenW, screenH, centerX, centerY, pills,
+                                  chromaticAberration, blurRadius, vibrancy, refraction);
+}
+
+void OutputController::deactivateGlassShader() {
+    HyprlandGlassShader::deactivate();
+}

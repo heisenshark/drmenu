@@ -32,6 +32,7 @@ qt_add_executable(drmenu
     src/daemon.cpp
     src/client.cpp
     src/standalone_app.cpp
+    src/hypr_shader.cpp
 )
 
 # Place binary in a 'bin' subdirectory to avoid conflicts with QML module directories
@@ -69,6 +70,7 @@ add_executable(test_screengrab
     src/theme_manager.cpp
     src/desktop_entry.cpp
     src/screen_detector.cpp
+    src/hypr_shader.cpp
 )
 target_link_libraries(test_screengrab PRIVATE
     Qt6::Core
