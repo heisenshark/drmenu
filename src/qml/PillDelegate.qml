@@ -140,6 +140,32 @@ Item {
             Behavior on opacity { NumberAnimation { duration: 60 } }
         }
 
+        // ── Liquid Glass Optical Dispersion Sheen (Across entire pill) ──
+        Rectangle {
+            id: chromaticSheen
+            anchors.fill: parent
+            anchors.margins: pillBody.border.width
+            radius: Math.max(0, pillBody.radius - pillBody.border.width)
+            color: "transparent"
+            visible: (rootRef.s.chromaticAberration === undefined || rootRef.s.chromaticAberration !== 0)
+            opacity: {
+                let baseOp = rootRef.s.chromaticOpacity !== undefined ? (rootRef.s.chromaticOpacity * 0.45) : 0.35
+                return pillDelegate.isHovered ? Math.min(1.0, baseOp + 0.20) : baseOp
+            }
+            z: 0
+
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.00; color: "#3500d2ff" } // Cyan / Blue refraction
+                GradientStop { position: 0.25; color: "#2500ffaa" } // Aqua / Green
+                GradientStop { position: 0.50; color: "#00ffffff" } // Transparent center
+                GradientStop { position: 0.75; color: "#25ffaa00" } // Amber / Orange
+                GradientStop { position: 1.00; color: "#35ff2d55" } // Magenta / Red refraction
+            }
+
+            Behavior on opacity { NumberAnimation { duration: 60 } }
+        }
+
         // ── Dynamic Liquid Caustic Bloom on Hover ───────────────────────
         Rectangle {
             anchors.fill: parent

@@ -126,25 +126,16 @@ void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
                                    float blurRadius,
                                    float vibrancy,
                                    float refraction) {
-    if (!isSupported() || pills.isEmpty()) return;
-
-    QString shaderCode = generateShader(screenWidth, screenHeight, centerX, centerY, pills,
-                                        chromaticAberration, blurRadius, vibrancy, refraction);
-
-    QString path = QDir::tempPath() + "/drmenu_liquid_glass.frag";
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        QTextStream out(&file);
-        out << shaderCode;
-        file.close();
-    }
-
-    QProcess proc;
-    proc.setStandardOutputFile(QProcess::nullDevice());
-    proc.setStandardErrorFile(QProcess::nullDevice());
-    QString cmd = QString("hl.config({ decoration = { screen_shader = '%1' } })").arg(path);
-    proc.start("hyprctl", {"eval", cmd});
-    proc.waitForFinished(60);
+    Q_UNUSED(screenWidth);
+    Q_UNUSED(screenHeight);
+    Q_UNUSED(centerX);
+    Q_UNUSED(centerY);
+    Q_UNUSED(pills);
+    Q_UNUSED(chromaticAberration);
+    Q_UNUSED(blurRadius);
+    Q_UNUSED(vibrancy);
+    Q_UNUSED(refraction);
+    // Global Hyprland screen_shader is bypassed to prevent shading language version mismatch errors.
 }
 
 void HyprlandGlassShader::deactivate() {
