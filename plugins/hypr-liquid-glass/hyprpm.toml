@@ -1,0 +1,13 @@
+[repository]
+name = "hypr-liquid-glass"
+authors = ["drmenu"]
+
+[hypr-liquid-glass]
+description = "Apple Liquid Glass & Chromatic Aberration plugin for Hyprland"
+authors = ["drmenu"]
+version = "0.1.0"
+build = [
+    "cmake -B build -S .",
+    "cmake --build build"
+]
+output = "build/hypr-liquid-glass.so"
