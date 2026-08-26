@@ -309,6 +309,10 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["guideRingOpacity"]     = 0.12;
         style["breadcrumbColor"]      = "#9aa5ce";
     } else if (name == "glassmorphism") {
+        style["useScreencopyGlass"]   = true;
+        style["screencopyBlurRadius"] = 35;
+        style["screencopyVibrancy"]   = 1.35;
+        style["chromaticAberration"]  = 8;
         style["backgroundColor"]      = "#000000";
         style["backgroundOpacity"]    = 0.0;
         style["pillColor"]            = "#35ffffff"; // 21% white translucent
@@ -334,6 +338,10 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["guideRingOpacity"]     = 0.15;
         style["breadcrumbColor"]      = "#cccccc";
     } else if (name == "apple-glass" || name == "apple" || name == "apple-dark" || name == "macos-glass") {
+        style["useScreencopyGlass"]   = true;
+        style["screencopyBlurRadius"] = 35;
+        style["screencopyVibrancy"]   = 1.35;
+        style["chromaticAberration"]  = 10;
         style["backgroundColor"]      = "#000000";
         style["backgroundOpacity"]    = 0.0; // Transparent backdrop so only pills blur
         style["pillColor"]            = "#55202026"; // translucent smoky acrylic glass
@@ -577,19 +585,21 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["showGuideRing"]        = false;
         style["showPointerLine"]      = false;
     } else if (name == "liquid-glass" || name == "apple-liquid" || name == "liquid" || name == "liquid-dark") {
-        style["useScreencopyGlass"]   = false;
-        style["screencopyBlurRadius"] = 0;
-        style["screencopyVibrancy"]   = 1.0;
-        style["chromaticAberration"]  = 0;
+        style["useScreencopyGlass"]   = true;
+        style["screencopyBlurRadius"] = 35;
+        style["screencopyVibrancy"]   = 1.45;
+        style["chromaticAberration"]  = 14;
+        style["chromaticBorderWidth"] = 2;
+        style["chromaticOpacity"]     = 0.85;
         style["backgroundColor"]      = "#000000";
         style["backgroundOpacity"]    = 0.0;
-        style["pillColor"]            = "#4214141c"; // Fluid deep liquid tint
-        style["pillHoverColor"]       = "#68252535";
-        style["pillBorderColor"]      = "#55ffffff"; // Multi-stage crystalline rim
+        style["pillColor"]            = "#35121218"; // Fluid deep liquid tint
+        style["pillHoverColor"]       = "#5520202c";
+        style["pillBorderColor"]      = "#45ffffff"; // Multi-stage crystalline rim
         style["pillBorderHoverColor"] = "#b0ffffff";
-        style["pillSubmenuColor"]     = "#42181426";
-        style["pillSubmenuHoverColor"]= "#682a2240";
-        style["pillSubmenuBorder"]    = "#55bf5af2";
+        style["pillSubmenuColor"]     = "#35161224";
+        style["pillSubmenuHoverColor"]= "#55281e3a";
+        style["pillSubmenuBorder"]    = "#45bf5af2";
         style["pillSubmenuBorderHover"] = "#b0df8aff";
         style["textColor"]            = "#f5f5f7";
         style["textHoverColor"]       = "#ffffff";
@@ -597,8 +607,8 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["iconColor"]            = "#ebebf5";
         style["iconHoverColor"]       = "#0a84ff";
         style["submenuAccent"]        = "#ff375f"; // Liquid Rose / Magenta
-        style["centerColor"]          = "#4214141c";
-        style["centerBorder"]         = "#55ffffff";
+        style["centerColor"]          = "#35121218";
+        style["centerBorder"]         = "#45ffffff";
         style["centerBorderHover"]    = "#0a84ff";
         style["centerDotColor"]       = "#ebebf5";
         style["centerDotHoverColor"]  = "#0a84ff";
@@ -695,9 +705,72 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["breadcrumbColor"]      = "#4b5563";
     }
 
-    // Apply custom overrides on top of resolved preset
+    // Apply custom overrides on top of resolved preset with alias normalization
     for (auto it = customOverrides.cbegin(); it != customOverrides.cend(); ++it) {
-        style[it.key()] = it.value();
+        QString key = it.key();
+        QVariant val = it.value();
+        style[key] = val;
+
+        // Normalise snake_case <-> camelCase aliases for liquid glass & blur controls
+        if (key == "blur_radius" || key == "blurRadius" || key == "glass_blur_radius" || key == "glassBlurRadius" ||
+            key == "glass_blur" || key == "glassBlur" || key == "screencopy_blur_radius" || key == "screencopyBlurRadius") {
+            style["screencopyBlurRadius"] = val;
+            style["blurRadius"]           = val;
+            style["blur_radius"]          = val;
+            style["glassBlurRadius"]      = val;
+        }
+        if (key == "screencopy_vibrancy" || key == "screencopyVibrancy" || key == "vibrancy" ||
+            key == "glass_vibrancy" || key == "glassVibrancy") {
+            style["screencopyVibrancy"] = val;
+            style["vibrancy"]           = val;
+        }
+        if (key == "glass" || key == "use_glass" || key == "useGlass" || key == "screencopy_glass" || key == "useScreencopyGlass") {
+            style["useScreencopyGlass"] = val;
+            style["useGlass"]           = val;
+            style["glass"]              = val;
+        }
+        if (key == "live" || key == "live_blur" || key == "liveBlur" || key == "screencopy_live" || key == "screencopyLive" || key == "live_capture" || key == "liveCapture") {
+            style["screencopyLive"] = val;
+            style["screencopy_live"] = val;
+            style["liveBlur"]       = val;
+            style["live_blur"]      = val;
+            style["live"]           = val;
+        }
+        if (key == "fps" || key == "screencopy_fps" || key == "screencopyFps") {
+            style["screencopyFps"] = val;
+            style["fps"]           = val;
+        }
+        if (key == "chromatic_aberration" || key == "chromaticAberration" || key == "chromatic_dispersion" || key == "chromaticDispersion") {
+            style["chromaticAberration"] = val;
+            style["chromatic_aberration"] = val;
+        }
+        if (key == "chromatic_opacity")      style["chromaticOpacity"]     = val;
+        if (key == "chromaticOpacity")       style["chromatic_opacity"]    = val;
+        if (key == "chromatic_border_width") style["chromaticBorderWidth"] = val;
+        if (key == "chromaticBorderWidth")   style["chromatic_border_width"] = val;
+        if (key == "specular_strength")      style["specularStrength"]     = val;
+        if (key == "specularStrength")       style["specular_strength"]    = val;
+        if (key == "blur_strength")          style["blurStrength"]         = val;
+        if (key == "blurStrength")           style["blur_strength"]        = val;
+        if (key == "refraction_strength")    style["refractionStrength"]   = val;
+        if (key == "refractionStrength")     style["refraction_strength"]  = val;
+        if (key == "corner_radius" || key == "pill_radius") {
+            style["pillRadius"] = val;
+            style["corner_radius"] = val;
+        }
+        if (key == "pillRadius") {
+            style["corner_radius"] = val;
+        }
+        if (key == "pill_height")            style["pillHeight"]           = val;
+        if (key == "pillHeight")             style["pill_height"]          = val;
+        if (key == "pill_color")             style["pillColor"]            = val;
+        if (key == "pillColor")              style["pill_color"]           = val;
+        if (key == "pill_hover_color")       style["pillHoverColor"]       = val;
+        if (key == "pillHoverColor")         style["pill_hover_color"]     = val;
+        if (key == "border_color")           style["pillBorderColor"]      = val;
+        if (key == "border_hover_color")     style["pillBorderHoverColor"] = val;
+        if (key == "border_width")           style["borderWidth"]          = val;
+        if (key == "border_hover_width")     style["borderHoverWidth"]     = val;
     }
 
     return style;

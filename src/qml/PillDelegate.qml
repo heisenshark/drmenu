@@ -53,13 +53,23 @@ Item {
             return rootRef.s.pillRadius !== undefined ? rootRef.s.pillRadius : height / 2
         }
 
-        color: pillDelegate.isHovered
-            ? (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuHoverColor || "#2a2438") : (rootRef.s.pillHoverColor || "#2b2b36"))
-            : (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuColor || "#18151f") : (rootRef.s.pillColor || "#1a1a20"))
+        color: {
+            if (rootRef.s.useGlass === true || rootRef.s.useScreencopyGlass === true || rootRef.s.glass === true) {
+                return pillDelegate.isHovered ? "#30ffffff" : "#12ffffff"
+            }
+            return pillDelegate.isHovered
+                ? (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuHoverColor || "#2a2438") : (rootRef.s.pillHoverColor || "#2b2b36"))
+                : (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuColor || "#18151f") : (rootRef.s.pillColor || "#1a1a20"))
+        }
 
-        border.color: pillDelegate.isHovered
-            ? (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuBorderHover || "#a855f7") : (rootRef.s.pillBorderHoverColor || "#e67e22"))
-            : (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuBorder || "#4a3060") : (rootRef.s.pillBorderColor || "#383842"))
+        border.color: {
+            if (rootRef.s.useGlass === true || rootRef.s.useScreencopyGlass === true || rootRef.s.glass === true) {
+                return pillDelegate.isHovered ? "#80ffffff" : "#38ffffff"
+            }
+            return pillDelegate.isHovered
+                ? (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuBorderHover || "#a855f7") : (rootRef.s.pillBorderHoverColor || "#e67e22"))
+                : (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuBorder || "#4a3060") : (rootRef.s.pillBorderColor || "#383842"))
+        }
 
         border.width: pillDelegate.isHovered
             ? (rootRef.s.borderHoverWidth || 2)
@@ -72,12 +82,17 @@ Item {
         Behavior on border.color { ColorAnimation { duration: 60; easing.type: Easing.OutQuad } }
 
         // ── Screencopy Optical Glass Blur Layer ────────────────────────
-        Item {
+        Rectangle {
             anchors.fill: parent
             anchors.margins: pillBody.border.width
-            visible: (rootRef.s.useScreencopyGlass === true) && (typeof screenGrabber !== "undefined") && (screenGrabber.revision > 0)
+            radius: Math.max(0, pillBody.radius - pillBody.border.width)
+            color: "transparent"
             clip: true
             z: -1
+            visible: (rootRef.s.useScreencopyGlass === true) && (typeof screenGrabber !== "undefined") && screenGrabber && (screenGrabber.revision > 0)
+
+            layer.enabled: true
+            layer.smooth: true
 
             Image {
                 visible: parent.visible
@@ -85,7 +100,7 @@ Item {
                 y: -(pillDelegate.y - (menuContainer.centerY - menuContainer.margin)) - pillBody.border.width
                 width: menuContainer.margin * 2
                 height: menuContainer.margin * 2
-                source: (typeof screenGrabber !== "undefined" && screenGrabber.revision > 0)
+                source: (typeof screenGrabber !== "undefined" && screenGrabber && screenGrabber.revision > 0)
                     ? ("image://screengrab/blurred?rev=" + screenGrabber.revision)
                     : ""
                 smooth: true
@@ -99,7 +114,10 @@ Item {
             anchors.margins: pillBody.border.width
             radius: Math.max(0, pillBody.radius - pillBody.border.width)
             color: "transparent"
-            opacity: pillDelegate.isHovered ? 0.90 : 0.60
+            opacity: {
+                let spec = rootRef.s.specularStrength !== undefined ? rootRef.s.specularStrength : 0.60
+                return pillDelegate.isHovered ? Math.min(1.0, spec * 1.5) : spec
+            }
             z: 0
 
             gradient: Gradient {
@@ -119,22 +137,22 @@ Item {
             anchors.margins: pillBody.border.width
             radius: Math.max(0, pillBody.radius - pillBody.border.width)
             color: "transparent"
-            border.width: 1
+            border.width: rootRef.s.chromaticBorderWidth !== undefined ? rootRef.s.chromaticBorderWidth : 2
             visible: (rootRef.s.chromaticAberration === undefined || rootRef.s.chromaticAberration !== 0)
             opacity: {
-                let baseOp = rootRef.s.chromaticOpacity !== undefined ? rootRef.s.chromaticOpacity : 0.70
-                return pillDelegate.isHovered ? Math.min(1.0, baseOp + 0.25) : baseOp
+                let baseOp = rootRef.s.chromaticOpacity !== undefined ? rootRef.s.chromaticOpacity : (typeof rootRef.s.chromaticAberration === "number" && rootRef.s.chromaticAberration <= 1.0 ? rootRef.s.chromaticAberration : 0.85)
+                return pillDelegate.isHovered ? Math.min(1.0, baseOp + 0.15) : baseOp
             }
             z: 0
 
             gradient: Gradient {
                 orientation: Gradient.Horizontal
-                GradientStop { position: 0.00; color: "#8000d2ff" } // Electric Cyan / Violet
-                GradientStop { position: 0.18; color: "#6000ff88" } // Emerald / Lime
+                GradientStop { position: 0.00; color: "#b000e5ff" } // Vivid Electric Cyan / Azure
+                GradientStop { position: 0.18; color: "#9000ff88" } // Vivid Neon Emerald
                 GradientStop { position: 0.38; color: "#00ffffff" } // Crystal Center
                 GradientStop { position: 0.62; color: "#00ffffff" } // Crystal Center
-                GradientStop { position: 0.82; color: "#65ffb000" } // Amber / Gold
-                GradientStop { position: 1.00; color: "#85ff2d55" } // Liquid Rose / Ruby
+                GradientStop { position: 0.82; color: "#95ffaa00" } // Vivid Amber Gold
+                GradientStop { position: 1.00; color: "#b5ff1744" } // Vivid Liquid Crimson / Rose
             }
 
             Behavior on opacity { NumberAnimation { duration: 60 } }
@@ -149,18 +167,18 @@ Item {
             color: "transparent"
             visible: (rootRef.s.chromaticAberration === undefined || rootRef.s.chromaticAberration !== 0)
             opacity: {
-                let baseOp = rootRef.s.chromaticOpacity !== undefined ? (rootRef.s.chromaticOpacity * 0.45) : 0.35
+                let baseOp = rootRef.s.chromaticOpacity !== undefined ? (rootRef.s.chromaticOpacity * 0.55) : 0.45
                 return pillDelegate.isHovered ? Math.min(1.0, baseOp + 0.20) : baseOp
             }
             z: 0
 
             gradient: Gradient {
                 orientation: Gradient.Horizontal
-                GradientStop { position: 0.00; color: "#3500d2ff" } // Cyan / Blue refraction
-                GradientStop { position: 0.25; color: "#2500ffaa" } // Aqua / Green
+                GradientStop { position: 0.00; color: "#5000e5ff" } // Cyan / Blue refraction
+                GradientStop { position: 0.25; color: "#3500ffaa" } // Aqua / Green
                 GradientStop { position: 0.50; color: "#00ffffff" } // Transparent center
-                GradientStop { position: 0.75; color: "#25ffaa00" } // Amber / Orange
-                GradientStop { position: 1.00; color: "#35ff2d55" } // Magenta / Red refraction
+                GradientStop { position: 0.75; color: "#35ffaa00" } // Amber / Orange
+                GradientStop { position: 1.00; color: "#50ff1744" } // Magenta / Red refraction
             }
 
             Behavior on opacity { NumberAnimation { duration: 60 } }

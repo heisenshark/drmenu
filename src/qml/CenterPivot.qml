@@ -32,6 +32,31 @@ Item {
         border.width: rootRef.s.centerBorderWidth !== undefined ? rootRef.s.centerBorderWidth : 3
 
         Behavior on border.color { ColorAnimation { duration: 50 } }
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: parent.border.width
+            radius: width / 2
+            color: "transparent"
+            clip: true
+            z: -1
+            visible: (rootRef.s.useScreencopyGlass === true) && (typeof screenGrabber !== "undefined") && screenGrabber && (screenGrabber.revision > 0)
+            layer.enabled: true
+            layer.smooth: true
+
+            Image {
+                visible: parent.visible
+                x: -(centerPivot.x - (menuContainerRef.centerX - menuContainerRef.margin))
+                y: -(centerPivot.y - (menuContainerRef.centerY - menuContainerRef.margin))
+                width: menuContainerRef.margin * 2
+                height: menuContainerRef.margin * 2
+                source: (typeof screenGrabber !== "undefined" && screenGrabber && screenGrabber.revision > 0)
+                    ? ("image://screengrab/blurred?rev=" + screenGrabber.revision)
+                    : ""
+                smooth: true
+                cache: false
+            }
+        }
     }
 
     // ── Mode B: Blender Donut Torus Ring Body ────────────────────────────────

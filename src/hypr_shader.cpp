@@ -119,6 +119,30 @@ QString HyprlandGlassShader::generateShader(int screenWidth, int screenHeight,
     return glsl;
 }
 
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include "screen_detector.h"
+
+static void sendHyprlandSocketCommand(const std::string& cmd) {
+    const char* his = getenv("HYPRLAND_INSTANCE_SIGNATURE");
+    if (!his || !his[0]) return;
+
+    std::string sockPath = "/run/user/1000/hypr/" + std::string(his) + "/.socket.sock";
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sockPath.c_str(), sizeof(addr.sun_path) - 1);
+
+    if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+        (void)write(fd, cmd.c_str(), cmd.size());
+    }
+    close(fd);
+}
+
 void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
                                    float centerX, float centerY,
                                    const QList<PillGeometry> &pills,
@@ -126,24 +150,43 @@ void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
                                    float blurRadius,
                                    float vibrancy,
                                    float refraction) {
+    if (!isSupported()) return;
+
     Q_UNUSED(screenWidth);
     Q_UNUSED(screenHeight);
     Q_UNUSED(centerX);
     Q_UNUSED(centerY);
-    Q_UNUSED(pills);
-    Q_UNUSED(chromaticAberration);
-    Q_UNUSED(blurRadius);
     Q_UNUSED(vibrancy);
-    Q_UNUSED(refraction);
-    // Global Hyprland screen_shader is bypassed to prevent shading language version mismatch errors.
+
+    TargetScreenInfo screenInfo = ScreenDetector::getTargetScreenInfo();
+    int monOffsetX = screenInfo.monitorX;
+    int monOffsetY = screenInfo.monitorY;
+
+    QString pillData;
+    QTextStream ss(&pillData);
+
+    for (int i = 0; i < pills.size(); ++i) {
+        const PillGeometry &p = pills[i];
+        float px = (float)monOffsetX + p.x - p.halfWidth;
+        float py = (float)monOffsetY + p.y - p.halfHeight;
+        float pw = p.halfWidth * 2.0f;
+        float ph = p.halfHeight * 2.0f;
+        float rad = p.radius > 0.0f ? p.radius : 18.0f;
+        float blur = blurRadius > 0.0f ? blurRadius : 24.0f;
+        float refr = refraction > 0.0f ? refraction : 0.85f;
+        float chrom = chromaticAberration > 0.0f ? chromaticAberration : 1.4f;
+        float spec = 0.70f;
+
+        // format: x y w h radius blur refr chrom spec milkyR milkyG milkyB milkyA borderR borderG borderB borderA borderW;
+        ss << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9 1.0 1.0 1.0 0.12 1.0 1.0 1.0 0.40 1.5;")
+                .arg(px).arg(py).arg(pw).arg(ph).arg(rad).arg(blur).arg(refr).arg(chrom).arg(spec);
+    }
+
+    std::string luaCall = "/repl return hl.plugin.liquid_glass.set_pills([[" + pillData.toStdString() + "]])";
+    sendHyprlandSocketCommand(luaCall);
 }
 
 void HyprlandGlassShader::deactivate() {
     if (!isSupported()) return;
-
-    QProcess proc;
-    proc.setStandardOutputFile(QProcess::nullDevice());
-    proc.setStandardErrorFile(QProcess::nullDevice());
-    proc.start("hyprctl", {"eval", "hl.config({ decoration = { screen_shader = '' } })"});
-    proc.waitForFinished(60);
+    sendHyprlandSocketCommand("/repl return hl.plugin.liquid_glass.clear()");
 }

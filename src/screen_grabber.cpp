@@ -1,11 +1,57 @@
 #include "screen_grabber.h"
 #include "screen_detector.h"
 #include <QProcess>
+#include <QFile>
+#include <QLocalSocket>
 #include <QGuiApplication>
 #include <QScreen>
 #include <QDebug>
 #include <QtGlobal>
 #include <chrono>
+#include <unistd.h>
+
+static void sendHyprlandCaptureEval(int x, int y, int w, int h) {
+    QString sig = qgetenv("HYPRLAND_INSTANCE_SIGNATURE");
+    if (sig.isEmpty()) return;
+
+    QString xdgRuntime = qgetenv("XDG_RUNTIME_DIR");
+    if (xdgRuntime.isEmpty()) xdgRuntime = "/run/user/" + QString::number(getuid());
+
+    QString socketPath = xdgRuntime + "/hypr/" + sig + "/.socket.sock";
+    QLocalSocket socket;
+    socket.connectToServer(socketPath);
+    if (socket.waitForConnected(20)) {
+        QString cmd = QString("/repl return hl.plugin.liquid_glass.capture(%1, %2, %3, %4)").arg(x).arg(y).arg(w).arg(h);
+        socket.write(cmd.toUtf8());
+        socket.flush();
+        socket.waitForReadyRead(30);
+    }
+}
+
+static bool readSHMUnderlay(QImage &outImage, int reqW, int reqH) {
+    for (int retry = 0; retry < 5; ++retry) {
+        QFile file("/dev/shm/drmenu-underlay.raw");
+        if (file.open(QIODevice::ReadOnly)) {
+            int32_t header[6] = {0};
+            if (file.read((char*)header, sizeof(header)) >= (qint64)(sizeof(int32_t) * 4)) {
+                int capW = header[0];
+                int capH = header[1];
+                if (capW == reqW && capH == reqH) {
+                    QByteArray rawPixels = file.read(capW * capH * 4);
+                    if (rawPixels.size() == capW * capH * 4) {
+                        QImage glImg((const uchar*)rawPixels.constData(), capW, capH, capW * 4, QImage::Format_RGBA8888);
+                        outImage = glImg.copy();
+                        file.close();
+                        return true;
+                    }
+                }
+            }
+            file.close();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return false;
+}
 
 ScreenGrabProvider::ScreenGrabProvider(ScreenGrabber *grabber)
     : QQuickImageProvider(QQuickImageProvider::Pixmap), m_grabber(grabber) {}
@@ -60,109 +106,125 @@ void ScreenGrabber::clear() {
 }
 
 static void fastBoxBlurH(const QRgb *src, QRgb *dst, int w, int h, int r) {
-    if (r <= 0) {
+    if (r <= 0 || w <= 1) {
         memcpy(dst, src, w * h * sizeof(QRgb));
         return;
     }
+    r = qBound(1, r, (w - 1) / 2);
     float iarr = 1.0f / (r + r + 1);
     for (int i = 0; i < h; i++) {
-        int ti = i * w;
-        int li = ti;
-        int ri = ti + r;
-        QRgb fv = src[ti];
-        QRgb lv = src[ti + w - 1];
+        int rowStart = i * w;
+        int ti = rowStart;
+        int li = rowStart;
+        int ri = rowStart + r;
+        QRgb fv = src[rowStart];
+        QRgb lv = src[rowStart + w - 1];
         int valR = (r + 1) * qRed(fv);
         int valG = (r + 1) * qGreen(fv);
         int valB = (r + 1) * qBlue(fv);
         int valA = (r + 1) * qAlpha(fv);
 
         for (int j = 0; j < r; j++) {
-            QRgb col = src[ti + j];
+            QRgb col = src[rowStart + qMin(j, w - 1)];
             valR += qRed(col);
             valG += qGreen(col);
             valB += qBlue(col);
             valA += qAlpha(col);
         }
         for (int j = 0; j <= r; j++) {
-            QRgb col = src[qMin(ri++, ti + w - 1)];
+            QRgb col = src[qMin(ri++, rowStart + w - 1)];
             valR += qRed(col) - qRed(fv);
             valG += qGreen(col) - qGreen(fv);
             valB += qBlue(col) - qBlue(fv);
             valA += qAlpha(col) - qAlpha(fv);
-            dst[ti++] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+            if (ti < rowStart + w) {
+                dst[ti++] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+            }
         }
         for (int j = r + 1; j < w - r; j++) {
-            QRgb col1 = src[ri++];
-            QRgb col2 = src[li++];
+            QRgb col1 = src[qMin(ri++, rowStart + w - 1)];
+            QRgb col2 = src[qMin(li++, rowStart + w - 1)];
             valR += qRed(col1) - qRed(col2);
             valG += qGreen(col1) - qGreen(col2);
             valB += qBlue(col1) - qBlue(col2);
             valA += qAlpha(col1) - qAlpha(col2);
-            dst[ti++] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+            if (ti < rowStart + w) {
+                dst[ti++] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+            }
         }
-        for (int j = w - r; j < w; j++) {
-            QRgb col = src[li++];
+        for (int j = qMax(r + 1, w - r); j < w; j++) {
+            QRgb col = src[qMin(li++, rowStart + w - 1)];
             valR += qRed(lv) - qRed(col);
             valG += qGreen(lv) - qGreen(col);
             valB += qBlue(lv) - qBlue(col);
             valA += qAlpha(lv) - qAlpha(col);
-            dst[ti++] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+            if (ti < rowStart + w) {
+                dst[ti++] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+            }
         }
     }
 }
 
 static void fastBoxBlurT(const QRgb *src, QRgb *dst, int w, int h, int r) {
-    if (r <= 0) {
+    if (r <= 0 || h <= 1) {
         memcpy(dst, src, w * h * sizeof(QRgb));
         return;
     }
+    r = qBound(1, r, (h - 1) / 2);
     float iarr = 1.0f / (r + r + 1);
     for (int i = 0; i < w; i++) {
-        int ti = i;
-        int li = ti;
-        int ri = ti + r * w;
-        QRgb fv = src[ti];
-        QRgb lv = src[ti + (h - 1) * w];
+        int colStart = i;
+        int ti = colStart;
+        int li = colStart;
+        int ri = colStart + r * w;
+        QRgb fv = src[colStart];
+        QRgb lv = src[colStart + (h - 1) * w];
         int valR = (r + 1) * qRed(fv);
         int valG = (r + 1) * qGreen(fv);
         int valB = (r + 1) * qBlue(fv);
         int valA = (r + 1) * qAlpha(fv);
 
         for (int j = 0; j < r; j++) {
-            QRgb col = src[ti + j * w];
+            QRgb col = src[colStart + qMin(j, h - 1) * w];
             valR += qRed(col);
             valG += qGreen(col);
             valB += qBlue(col);
             valA += qAlpha(col);
         }
         for (int j = 0; j <= r; j++) {
-            QRgb col = src[qMin(ri, ti + (h - 1) * w)];
+            QRgb col = src[qMin(ri, colStart + (h - 1) * w)];
             ri += w;
             valR += qRed(col) - qRed(fv);
             valG += qGreen(col) - qGreen(fv);
             valB += qBlue(col) - qBlue(fv);
             valA += qAlpha(col) - qAlpha(fv);
-            dst[ti] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
-            ti += w;
+            if (ti < w * h) {
+                dst[ti] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+                ti += w;
+            }
         }
         for (int j = r + 1; j < h - r; j++) {
-            QRgb col1 = src[ri]; ri += w;
-            QRgb col2 = src[li]; li += w;
+            QRgb col1 = src[qMin(ri, colStart + (h - 1) * w)]; ri += w;
+            QRgb col2 = src[qMin(li, colStart + (h - 1) * w)]; li += w;
             valR += qRed(col1) - qRed(col2);
             valG += qGreen(col1) - qGreen(col2);
             valB += qBlue(col1) - qBlue(col2);
             valA += qAlpha(col1) - qAlpha(col2);
-            dst[ti] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
-            ti += w;
+            if (ti < w * h) {
+                dst[ti] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+                ti += w;
+            }
         }
-        for (int j = h - r; j < h; j++) {
-            QRgb col = src[li]; li += w;
+        for (int j = qMax(r + 1, h - r); j < h; j++) {
+            QRgb col = src[qMin(li, colStart + (h - 1) * w)]; li += w;
             valR += qRed(lv) - qRed(col);
             valG += qGreen(lv) - qGreen(col);
             valB += qBlue(lv) - qBlue(col);
             valA += qAlpha(lv) - qAlpha(col);
-            dst[ti] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
-            ti += w;
+            if (ti < w * h) {
+                dst[ti] = qRgba(valR * iarr, valG * iarr, valB * iarr, valA * iarr);
+                ti += w;
+            }
         }
     }
 }
@@ -180,18 +242,24 @@ bool ScreenGrabber::captureRegion(int x, int y, int width, int height, int blurR
 
     QImage captured;
 
-    QString geom = QString("%1,%2 %3x%4").arg(globalX).arg(globalY).arg(width).arg(height);
-    QStringList args = {"-g", geom, "-t", "ppm", "-"};
+    // 1. Notify plugin of requested bounding box via fast socket using GLOBAL layout coordinates
+    sendHyprlandCaptureEval(globalX, globalY, width, height);
 
-    QProcess proc;
-    proc.start("grim", args);
-    if (proc.waitForFinished(150) && proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0) {
-        QByteArray data = proc.readAllStandardOutput();
-        if (!data.isEmpty()) {
-            captured.loadFromData(data, "PPM");
+    // 2. Try instantaneous Hyprland plugin direct underlay capture
+    if (!readSHMUnderlay(captured, width, height)) {
+        // Fallback to grim screencopy if plugin has not rendered yet or is not loaded
+        QString geom = QString("%1,%2 %3x%4").arg(globalX).arg(globalY).arg(width).arg(height);
+        QProcess proc;
+        proc.start("grim", {"-g", geom, "-t", "ppm", "-"});
+        if (proc.waitForFinished(100) && proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0) {
+            QByteArray data = proc.readAllStandardOutput();
+            if (!data.isEmpty()) {
+                captured.loadFromData(data, "PPM");
+            }
         }
     }
 
+    // 3. Fallback using Qt QScreen
     if (captured.isNull()) {
         QScreen *targetScreen = QGuiApplication::screenAt(QPoint(globalX, globalY));
         if (!targetScreen) targetScreen = QGuiApplication::primaryScreen();
@@ -275,31 +343,28 @@ void ScreenGrabber::workerLoop() {
             int globalX = screenInfo.monitorX + x;
             int globalY = screenInfo.monitorY + y;
 
-            QString geom = QString("%1,%2 %3x%4").arg(globalX).arg(globalY).arg(w).arg(h);
-            QStringList args = {"-g", geom, "-t", "ppm", "-"};
+            QImage captured;
 
-            QProcess proc;
-            proc.start("grim", args);
-            if (proc.waitForFinished(120) && proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0) {
-                QByteArray data = proc.readAllStandardOutput();
-                if (!data.isEmpty() && m_workerRunning.load()) {
-                    QImage captured;
-                    if (captured.loadFromData(data, "PPM")) {
-                        QImage blurred = applyFastBlur(captured, blur, vib, chrom);
-                        if (m_workerRunning.load()) {
-                            {
-                                QMutexLocker locker(&m_mutex);
-                                m_rawImage = captured;
-                                m_blurredImage = blurred;
-                                m_captureX = x;
-                                m_captureY = y;
-                                m_captureW = w;
-                                m_captureH = h;
-                                m_revision++;
-                            }
-                            QMetaObject::invokeMethod(this, "captureUpdated", Qt::QueuedConnection);
-                        }
+            // 1. Trigger instantaneous underlay capture via Hyprland socket using global coordinates
+            sendHyprlandCaptureEval(globalX, globalY, w, h);
+
+            // 2. Direct memory read from plugin compositor underlay (100% drmenu-free)
+            readSHMUnderlay(captured, w, h);
+
+            if (!captured.isNull() && m_workerRunning.load()) {
+                QImage blurred = applyFastBlur(captured, blur, vib, chrom);
+                if (m_workerRunning.load()) {
+                    {
+                        QMutexLocker locker(&m_mutex);
+                        m_rawImage = captured;
+                        m_blurredImage = blurred;
+                        m_captureX = x;
+                        m_captureY = y;
+                        m_captureW = w;
+                        m_captureH = h;
+                        m_revision++;
                     }
+                    QMetaObject::invokeMethod(this, "captureUpdated", Qt::QueuedConnection);
                 }
             }
         }

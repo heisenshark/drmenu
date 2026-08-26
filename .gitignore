@@ -17,3 +17,8 @@ pkg/
 src/
 *.pkg.tar.zst
 
+
+# Nix build outputs
+result
+result-*
+build-plugin/

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "-fPIC -O3 -Wall -Wno-unused-variable -Wno-unused-parameter")
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(DEPS REQUIRED hyprland libdrm pixman-1 cairo pangocairo libinput)
+pkg_check_modules(DEPS REQUIRED hyprland pixman-1 cairo pangocairo libdrm)
 
 add_library(hypr-liquid-glass SHARED
     main.cpp

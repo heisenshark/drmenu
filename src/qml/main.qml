@@ -226,10 +226,16 @@ ApplicationWindow {
 
     function updateGlassOptics() {
         if (typeof output === "undefined") return
-        let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration : 14.0
-        let blurRad = (root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 8.0
-        let vib = (root.s.screencopyVibrancy !== undefined) ? root.s.screencopyVibrancy : 1.45
-        let refr = (root.s.lensRefraction !== undefined) ? root.s.lensRefraction : 0.008
+        let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration
+                  : ((root.s.chromatic_aberration !== undefined) ? root.s.chromatic_aberration : 1.6)
+        let blurRad = (root.s.blurStrength !== undefined) ? root.s.blurStrength
+                    : ((root.s.blur_strength !== undefined) ? root.s.blur_strength
+                    : ((root.s.blurRadius !== undefined) ? root.s.blurRadius
+                    : ((root.s.blur_radius !== undefined) ? root.s.blur_radius
+                    : ((root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 28.0))))
+        let vib = (root.s.vibrancy !== undefined) ? root.s.vibrancy : 1.35
+        let refr = (root.s.refractionStrength !== undefined) ? root.s.refractionStrength
+                 : ((root.s.refraction_strength !== undefined) ? root.s.refraction_strength : 0.85)
 
         let count = menuModel.count
         if (count <= 0) return
@@ -245,7 +251,9 @@ ApplicationWindow {
             let angle = root.getItemAngleRad(i, count)
             let px = cx + Math.cos(angle) * rDist
             let py = cy + Math.sin(angle) * rDist
-            let pHalfW = 60.0
+            let itemObj = menuModel.get(i)
+            let labelText = (itemObj && itemObj.label) ? itemObj.label : ""
+            let pHalfW = Math.max(50.0, (labelText.length * 8.5 + 46.0) / 2.0)
             pills.push({
                 x: px,
                 y: py,
@@ -267,16 +275,27 @@ ApplicationWindow {
     }
 
     function triggerScreenCapture() {
-        if (typeof screenGrabber !== "undefined" && root.s && root.s.useScreencopyGlass === true) {
+        if (typeof screenGrabber !== "undefined" && root.s && (root.s.useScreencopyGlass === true || root.s.useGlass === true || root.s.glass === true)) {
             let pad = Math.round(menuContainer.margin)
             let cx = Math.round(menuContainer.centerX)
             let cy = Math.round(menuContainer.centerY)
-            let blurRad = (root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 40
-            let vib = (root.s.screencopyVibrancy !== undefined) ? root.s.screencopyVibrancy : 1.45
-            let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration : 14
+            let blurRad = (root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius
+                        : ((root.s.blurRadius !== undefined) ? root.s.blurRadius
+                        : ((root.s.blur_radius !== undefined) ? root.s.blur_radius
+                        : ((root.s.glassBlurRadius !== undefined) ? root.s.glassBlurRadius
+                        : ((root.s.glass_blur_radius !== undefined) ? root.s.glass_blur_radius : 35))))
+            let vib = (root.s.screencopyVibrancy !== undefined) ? root.s.screencopyVibrancy
+                    : ((root.s.vibrancy !== undefined) ? root.s.vibrancy : 1.35)
+            let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration
+                      : ((root.s.chromatic_aberration !== undefined) ? root.s.chromatic_aberration : 8)
 
-            if (root.s.screencopyLive === true) {
-                let fps = (root.s.screencopyFps !== undefined) ? root.s.screencopyFps : 30
+            let isLive = (root.s.screencopyLive === true || root.s.screencopy_live === true ||
+                          root.s.liveBlur === true || root.s.live_blur === true ||
+                          root.s.liveCapture === true || root.s.live_capture === true ||
+                          root.s.live === true)
+            if (isLive) {
+                let fps = (root.s.screencopyFps !== undefined) ? root.s.screencopyFps
+                        : ((root.s.fps !== undefined) ? root.s.fps : 30)
                 screenGrabber.startLiveCapture(cx - pad, cy - pad, pad * 2, pad * 2, blurRad, vib, chrom, fps)
             } else {
                 screenGrabber.captureRegion(cx - pad, cy - pad, pad * 2, pad * 2, blurRad, vib, chrom)
