@@ -358,17 +358,7 @@ static void renderTriangles(PHLMONITOR pMonArg) {
 
     glUseProgram(g_triProgram);
     std::vector<float> vertexData;
-    vertexData.reserve((trisCopy.size() + 1) * 3 * 6);
-
-    // Add a guaranteed giant center white triangle in NDC: [-0.6, -0.6], [0.6, -0.6], [0.0, 0.6]
-    vertexData.push_back(-0.6f); vertexData.push_back(-0.6f);
-    vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f);
-
-    vertexData.push_back(0.6f); vertexData.push_back(-0.6f);
-    vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f);
-
-    vertexData.push_back(0.0f); vertexData.push_back(0.6f);
-    vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f);
+    vertexData.reserve(trisCopy.size() * 3 * 6);
 
     for (const auto& tri : trisCopy) {
         float ndcX1 = (tri.x1 / (float)monW) * 2.0f - 1.0f;
@@ -589,7 +579,21 @@ static int luaRefresh(lua_State* L) {
     return 1;
 }
 
+static bool hasActiveShapes() {
+    {
+        std::lock_guard<std::mutex> lock(g_pillMutex);
+        if (!g_pills.empty()) return true;
+    }
+    FILE* f = fopen(TRI_STATE_FILE, "rb");
+    if (!f) return false;
+    uint32_t count = 0;
+    bool hasTris = (fread(&count, sizeof(count), 1, f) == 1 && count > 0);
+    fclose(f);
+    return hasTris;
+}
+
 static CHyprSignalListener g_renderStageListener;
+static CHyprSignalListener g_renderPreListener;
 
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
@@ -611,10 +615,21 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         logToFile("All lingering hooks unhooked and cleared successfully!");
     }
 
+    g_renderPreListener = Event::bus()->m_events.render.pre.registerListener([](std::any d) {
+        try {
+            PHLMONITOR pMon = std::any_cast<PHLMONITOR>(d);
+            if (pMon && pMon->m_enabled && hasActiveShapes()) {
+                pMon->m_forceFullFrames = 2;
+                if (g_pHyprRenderer)
+                    g_pHyprRenderer->damageMonitor(pMon);
+            }
+        } catch (...) {}
+    });
+
     g_renderStageListener = Event::bus()->m_events.render.stage.registerListener([](std::any d) {
         try {
             eRenderStage stage = std::any_cast<eRenderStage>(d);
-            if (stage == RENDER_LAST_MOMENT || stage == RENDER_POST_WINDOWS) {
+            if (stage == RENDER_LAST_MOMENT) {
                 renderLiquidGlassPills(nullptr);
                 renderTriangles(nullptr);
             }
@@ -673,6 +688,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
 APICALL EXPORT void PLUGIN_EXIT() {
     g_renderStageListener = nullptr;
+    g_renderPreListener = nullptr;
     if (g_triProgram) {
         glDeleteProgram(g_triProgram);
         g_triProgram = 0;
