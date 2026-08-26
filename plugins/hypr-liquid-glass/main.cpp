@@ -42,18 +42,6 @@ static void registerConfigValues() {
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
-    const std::string hyprlandHash = __hyprland_api_get_hash();
-    const std::string pluginHash   = __hyprland_api_get_client_hash();
-
-    if (hyprlandHash != pluginHash) {
-        HyprlandAPI::addNotificationV2(PHANDLE, {
-            {"text", std::string("[hypr-liquid-glass] ABI Mismatch: Built with " + pluginHash + ", running " + hyprlandHash)},
-            {"time", (uint64_t)6000},
-            {"color", CHyprColor(1.0, 0.2, 0.2, 1.0)}
-        });
-        throw std::runtime_error("hypr-liquid-glass: Hyprland ABI version mismatch");
-    }
-
     registerConfigValues();
 
     // Register runtime dispatchers
@@ -77,19 +65,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     HyprlandAPI::reloadConfig();
 
-    HyprlandAPI::addNotificationV2(PHANDLE, {
-        {"text", std::string("✨ [hypr-liquid-glass] Apple Liquid Glass & Chromatic Aberration plugin active!")},
-        {"time", (uint64_t)4000},
-        {"color", CHyprColor(0.2, 0.8, 0.4, 1.0)}
-    });
-
     return {"hypr-liquid-glass", "Apple Liquid Glass, Optical Chromatic Dispersion & Refraction", "drmenu", "0.1.0"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
-    HyprlandAPI::addNotificationV2(PHANDLE, {
-        {"text", std::string("[hypr-liquid-glass] Plugin unloaded.")},
-        {"time", (uint64_t)2000},
-        {"color", CHyprColor(0.8, 0.6, 0.2, 1.0)}
-    });
 }
