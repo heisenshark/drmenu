@@ -226,8 +226,13 @@ ApplicationWindow {
             let blurRad = (root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 40
             let vib = (root.s.screencopyVibrancy !== undefined) ? root.s.screencopyVibrancy : 1.45
             let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration : 14
-            let fps = (root.s.screencopyFps !== undefined) ? root.s.screencopyFps : 30
-            screenGrabber.startLiveCapture(cx - pad, cy - pad, pad * 2, pad * 2, blurRad, vib, chrom, fps)
+
+            if (root.s.screencopyLive === true) {
+                let fps = (root.s.screencopyFps !== undefined) ? root.s.screencopyFps : 30
+                screenGrabber.startLiveCapture(cx - pad, cy - pad, pad * 2, pad * 2, blurRad, vib, chrom, fps)
+            } else {
+                screenGrabber.captureRegion(cx - pad, cy - pad, pad * 2, pad * 2, blurRad, vib, chrom)
+            }
         }
     }
 

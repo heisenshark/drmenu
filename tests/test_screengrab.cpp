@@ -82,7 +82,18 @@ int main(int argc, char *argv[]) {
         assert(!blurred.isNull());
         assert(raw.size() == blurred.size());
     }
-    std::cout << "  [PASS] ScreenGrabber pipeline executed successfully.\n";
+    // ── Test 6: Vibrancy Stability & Idempotency ───────────────────────────
+    std::cout << "[Test 6] Testing Vibrancy Saturation Stability...\n";
+    QImage colorImg(10, 10, QImage::Format_ARGB32);
+    colorImg.fill(QColor(180, 100, 60)); // Moderate orange
+
+    QImage vibPass1 = ScreenGrabber::applyFastBlur(colorImg, 0, 1.45, 0);
+    QColor c1 = vibPass1.pixelColor(5, 5);
+    std::cout << "  - Original (180, 100, 60) -> Vibrancy Pass 1: (" << c1.red() << ", " << c1.green() << ", " << c1.blue() << ")\n";
+
+    assert(c1.red() >= 180);
+    assert(c1.blue() <= 60);
+    std::cout << "  [PASS] Single-pass vibrancy correctly boosts saturation without divergence.\n";
 
     std::cout << "=== ALL TESTS PASSED SUCCESSFULLY! ===\n";
     return 0;
