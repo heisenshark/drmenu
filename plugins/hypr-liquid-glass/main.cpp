@@ -319,8 +319,17 @@ static void renderTriangles(PHLMONITOR pMonArg) {
     }
     if (!g_triProgram || !g_triVao) return;
 
+    GLint curFb = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &curFb);
+    GLboolean colorMask[4];
+    glGetBooleanv(GL_COLOR_WRITEMASK, colorMask);
+
     if (!g_triInitLogged) {
-        logToFile("renderTriangles: first render active with " + std::to_string(trisCopy.size()) + " tris, viewport=" + std::to_string(monW) + "x" + std::to_string(monH));
+        logToFile("renderTriangles: first render active with " + std::to_string(trisCopy.size()) + 
+                  " tris, vp=" + std::to_string(monW) + "x" + std::to_string(monH) + 
+                  ", drawFB=" + std::to_string(curFb) + 
+                  ", colorMask=[" + std::to_string((int)colorMask[0]) + "," + std::to_string((int)colorMask[1]) + "," + std::to_string((int)colorMask[2]) + "," + std::to_string((int)colorMask[3]) + "]" +
+                  ", preErr=" + std::to_string(glGetError()));
         g_triInitLogged = true;
     }
 
@@ -339,6 +348,7 @@ static void renderTriangles(PHLMONITOR pMonArg) {
     glGetIntegerv(GL_BLEND_SRC_RGB, &prevBlendSrc);
     glGetIntegerv(GL_BLEND_DST_RGB, &prevBlendDst);
 
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDisable(GL_SCISSOR_TEST);
     glViewport(0, 0, monW, monH);
     glDisable(GL_DEPTH_TEST);
@@ -347,11 +357,18 @@ static void renderTriangles(PHLMONITOR pMonArg) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glUseProgram(g_triProgram);
-    glBindVertexArray(g_triVao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_triVbo);
-
     std::vector<float> vertexData;
-    vertexData.reserve(trisCopy.size() * 3 * 6);
+    vertexData.reserve((trisCopy.size() + 1) * 3 * 6);
+
+    // Add a guaranteed giant center white triangle in NDC: [-0.6, -0.6], [0.6, -0.6], [0.0, 0.6]
+    vertexData.push_back(-0.6f); vertexData.push_back(-0.6f);
+    vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f);
+
+    vertexData.push_back(0.6f); vertexData.push_back(-0.6f);
+    vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f);
+
+    vertexData.push_back(0.0f); vertexData.push_back(0.6f);
+    vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f); vertexData.push_back(1.0f);
 
     for (const auto& tri : trisCopy) {
         float ndcX1 = (tri.x1 / (float)monW) * 2.0f - 1.0f;
@@ -373,13 +390,22 @@ static void renderTriangles(PHLMONITOR pMonArg) {
         vertexData.push_back(tri.r); vertexData.push_back(tri.g); vertexData.push_back(tri.b); vertexData.push_back(tri.a);
     }
 
+    glBindVertexArray(g_triVao);
+    glBindBuffer(GL_ARRAY_BUFFER, g_triVbo);
+
     glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(float), vertexData.data(), GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
 
-    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(trisCopy.size() * 3));
+    while (glGetError() != GL_NO_ERROR) {} // drain prior errors
+
+    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(vertexData.size() / 6));
+    GLenum drawErr = glGetError();
+    if (drawErr) {
+        logToFile("renderTriangles: glDrawArrays error=" + std::to_string(drawErr));
+    }
 
     // Full state restoration
     glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
@@ -543,6 +569,8 @@ static void forceFrames() {
     if (State::monitorState()) {
         for (auto& mon : State::monitorState()->monitors()) {
             if (mon && mon->m_enabled) {
+                if (g_pHyprRenderer)
+                    g_pHyprRenderer->damageMonitor(mon);
                 mon->m_forceFullFrames = 4;
                 mon->scheduleFrame();
             }
