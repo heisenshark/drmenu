@@ -31,11 +31,21 @@ Item {
     width:  shapeType === "circle" ? height : (pillRow.implicitWidth + 28)
     height: shapeType === "circle" ? (rootRef.s.pillHeight || 48) : (rootRef.s.pillHeight || 42)
 
-    Behavior on scale { NumberAnimation { duration: 50; easing.type: Easing.OutQuad } }
-    scale: isHovered ? 1.10 : 1.0
+    Behavior on scale {
+        NumberAnimation {
+            duration: 90
+            easing.type: Easing.OutBack
+            easing.overshoot: 1.18
+        }
+    }
+    scale: isHovered ? 1.09 : 1.0
 
+    // ── Main Glass Body ────────────────────────────────────────────────
     Rectangle {
+        id: pillBody
         anchors.fill: parent
+        antialiasing: true
+        smooth: true
         radius: {
             if (pillDelegate.shapeType === "circle") return height / 2
             if (pillDelegate.shapeType === "rectangle") return 0
@@ -55,8 +65,64 @@ Item {
             ? (rootRef.s.borderHoverWidth || 2)
             : (rootRef.s.borderWidth || 1)
 
-        Behavior on color        { ColorAnimation { duration: 40 } }
-        Behavior on border.color { ColorAnimation { duration: 40 } }
+        layer.enabled: true
+        layer.smooth: true
+
+        Behavior on color        { ColorAnimation { duration: 60; easing.type: Easing.OutQuad } }
+        Behavior on border.color { ColorAnimation { duration: 60; easing.type: Easing.OutQuad } }
+
+        // ── Screencopy Optical Glass Blur Layer ────────────────────────
+        Item {
+            anchors.fill: parent
+            anchors.margins: pillBody.border.width
+            visible: (rootRef.s.useScreencopyGlass === true) && (typeof screenGrabber !== "undefined") && (screenGrabber.revision > 0)
+            clip: true
+            z: -1
+
+            Image {
+                visible: parent.visible
+                x: -(pillDelegate.x - (menuContainer.centerX - menuContainer.margin)) - pillBody.border.width
+                y: -(pillDelegate.y - (menuContainer.centerY - menuContainer.margin)) - pillBody.border.width
+                width: menuContainer.margin * 2
+                height: menuContainer.margin * 2
+                source: (typeof screenGrabber !== "undefined" && screenGrabber.revision > 0)
+                    ? ("image://screengrab/blurred?rev=" + screenGrabber.revision)
+                    : ""
+                smooth: true
+                cache: false
+            }
+        }
+
+        // ── Specular Fresnel Gloss Sheen (Inset inside border) ─────────
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: pillBody.border.width
+            radius: Math.max(0, pillBody.radius - pillBody.border.width)
+            color: "transparent"
+            opacity: pillDelegate.isHovered ? 0.90 : 0.60
+            z: 0
+
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.00; color: pillDelegate.isHovered ? "#35ffffff" : "#20ffffff" }
+                GradientStop { position: 0.40; color: "#00ffffff" }
+                GradientStop { position: 1.00; color: pillDelegate.isHovered ? "#18ffffff" : "#08ffffff" }
+            }
+
+            Behavior on opacity { NumberAnimation { duration: 60 } }
+        }
+
+        // ── Dynamic Liquid Caustic Bloom on Hover ───────────────────────
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: pillBody.border.width
+            radius: Math.max(0, pillBody.radius - pillBody.border.width)
+            visible: pillDelegate.isHovered
+            opacity: pillDelegate.isHovered ? 0.30 : 0.0
+            color: pillDelegate.isSubmenu ? (rootRef.s.submenuAccent || "#bf5af2") : (rootRef.s.accentColor || "#0a84ff")
+            z: 0
+            Behavior on opacity { NumberAnimation { duration: 60 } }
+        }
 
         Row {
             id: pillRow

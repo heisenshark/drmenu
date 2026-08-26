@@ -23,10 +23,14 @@ ApplicationWindow {
         if (visible) {
             root.raise()
             root.requestActivate()
+            root.triggerScreenCapture()
             menuContainer.opacity = 0
             menuContainer.scale = 0.92
             openAnimation.start()
         } else {
+            if (typeof screenGrabber !== "undefined") {
+                screenGrabber.stopLiveCapture()
+            }
             openAnimation.stop()
             menuContainer.opacity = 0
             menuContainer.scale = 1.0
@@ -106,6 +110,7 @@ ApplicationWindow {
         menuStack = menuStack.concat([menuName])
         hasParent = menuStack.length > 1
         loadItems(targetItems)
+        root.triggerScreenCapture()
     }
 
     function goBack() {
@@ -128,6 +133,7 @@ ApplicationWindow {
         }
 
         loadItems(parentItems)
+        root.triggerScreenCapture()
     }
 
     function handleEscape() {
@@ -187,6 +193,7 @@ ApplicationWindow {
             menuStack = [output.initialMenu]
             hasParent = false
             loadItems(items)
+            root.triggerScreenCapture()
         }
 
         function onItemsChanged() {
@@ -205,8 +212,22 @@ ApplicationWindow {
             }
 
             loadItems(output.items)
+            root.triggerScreenCapture()
             menuContainer.opacity = 1.0
             openAnimation.start()
+        }
+    }
+
+    function triggerScreenCapture() {
+        if (typeof screenGrabber !== "undefined" && root.s && root.s.useScreencopyGlass === true) {
+            let pad = Math.round(menuContainer.margin)
+            let cx = Math.round(menuContainer.centerX)
+            let cy = Math.round(menuContainer.centerY)
+            let blurRad = (root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 40
+            let vib = (root.s.screencopyVibrancy !== undefined) ? root.s.screencopyVibrancy : 1.45
+            let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration : 14
+            let fps = (root.s.screencopyFps !== undefined) ? root.s.screencopyFps : 30
+            screenGrabber.startLiveCapture(cx - pad, cy - pad, pad * 2, pad * 2, blurRad, vib, chrom, fps)
         }
     }
 
@@ -221,11 +242,13 @@ ApplicationWindow {
                 menuStack = [output.initialMenu]
                 hasParent = false
                 loadItems(items)
+                root.triggerScreenCapture()
             }
         } else if (output.items && output.items.length > 0) {
             menuStack = []
             hasParent = false
             loadItems(output.items)
+            root.triggerScreenCapture()
         }
     }
 

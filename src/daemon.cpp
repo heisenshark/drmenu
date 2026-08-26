@@ -4,6 +4,7 @@
 #include "screen_detector.h"
 #include "output_controller.h"
 #include "theme_icon_provider.h"
+#include "screen_grabber.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -66,8 +67,8 @@ int DaemonServer::run(int argc, char *argv[]) {
         QProcess proc;
         proc.setStandardOutputFile(QProcess::nullDevice());
         proc.setStandardErrorFile(QProcess::nullDevice());
-        proc.start("hyprctl", {"eval", "layerrule = noanim, drmenu"});
-        proc.waitForFinished(100);
+        proc.start("hyprctl", {"eval", "hl.layer_rule({ match = { namespace = 'drmenu' }, no_anim = true })"});
+        proc.waitForFinished(80);
     }
 
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
@@ -87,7 +88,9 @@ int DaemonServer::run(int argc, char *argv[]) {
 
     QQmlApplicationEngine engine;
     OutputController output;
+    ScreenGrabber screenGrabber;
     engine.rootContext()->setContextProperty("output", &output);
+    engine.rootContext()->setContextProperty("screenGrabber", &screenGrabber);
 
     const QUrl url(QStringLiteral("qrc:/drmenu/src/qml/main.qml"));
     QQuickWindow *window = nullptr;
@@ -117,6 +120,7 @@ int DaemonServer::run(int argc, char *argv[]) {
     }, Qt::QueuedConnection);
 
     engine.addImageProvider(QStringLiteral("icon"), new ThemeIconProvider);
+    engine.addImageProvider(QStringLiteral("screengrab"), new ScreenGrabProvider(&screenGrabber));
     engine.load(url);
     auto buildCommandMap = [](const QVariantMap &allMenus) {
         QMap<QString, QString> map;
@@ -263,10 +267,8 @@ int DaemonServer::run(int argc, char *argv[]) {
                     QString initial = payload["menu"].toString();
                     if (initial.isEmpty()) initial = payload["initialMenu"].toString();
 
-                    if (cachedAllMenus.isEmpty()) {
-                        cachedAllMenus   = ConfigLoader::loadAllMenus("");
-                        cachedCommandMap = buildCommandMap(cachedAllMenus);
-                    }
+                    cachedAllMenus   = ConfigLoader::loadAllMenus("");
+                    cachedCommandMap = buildCommandMap(cachedAllMenus);
 
                     if (cachedAllMenus.contains(initial)) {
                         QVariantMap mData    = cachedAllMenus[initial].toMap();

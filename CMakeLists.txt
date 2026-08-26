@@ -25,6 +25,7 @@ qt_add_executable(drmenu
     src/config_loader.cpp
     src/desktop_entry.cpp
     src/theme_icon_provider.cpp
+    src/screen_grabber.cpp
     src/theme_manager.cpp
     src/screen_detector.cpp
     src/output_controller.cpp
@@ -58,6 +59,26 @@ target_link_libraries(drmenu PRIVATE
     Qt6::Quick
     Qt6::Network
     LayerShellQt::Interface
+)
+
+# Test executable for screencopy optics, blur, and chromatic aberration
+add_executable(test_screengrab
+    tests/test_screengrab.cpp
+    src/screen_grabber.cpp
+    src/config_loader.cpp
+    src/theme_manager.cpp
+    src/desktop_entry.cpp
+    src/screen_detector.cpp
+)
+target_link_libraries(test_screengrab PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Quick
+    Qt6::Network
+)
+target_include_directories(test_screengrab PRIVATE src)
+set_target_properties(test_screengrab PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 install(TARGETS drmenu RUNTIME DESTINATION bin)

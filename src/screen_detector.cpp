@@ -77,6 +77,10 @@ TargetScreenInfo ScreenDetector::getTargetScreenInfo() {
                         info.monitorName = name;
                         info.localX = cx - mx;
                         info.localY = cy - my;
+                        info.monitorX = mx;
+                        info.monitorY = my;
+                        info.monitorWidth = mw;
+                        info.monitorHeight = mh;
                         return info;
                     }
                 }
@@ -90,6 +94,10 @@ TargetScreenInfo ScreenDetector::getTargetScreenInfo() {
                 int my = mon["y"].toInt();
                 info.localX = cx - mx;
                 info.localY = cy - my;
+                info.monitorX = mx;
+                info.monitorY = my;
+                info.monitorWidth = mon["width"].toInt();
+                info.monitorHeight = mon["height"].toInt();
                 return info;
             }
         }
@@ -103,6 +111,10 @@ TargetScreenInfo ScreenDetector::getTargetScreenInfo() {
         info.monitorName = targetScreen->name();
         info.localX = cx - targetScreen->geometry().x();
         info.localY = cy - targetScreen->geometry().y();
+        info.monitorX = targetScreen->geometry().x();
+        info.monitorY = targetScreen->geometry().y();
+        info.monitorWidth = targetScreen->geometry().width();
+        info.monitorHeight = targetScreen->geometry().height();
     }
 
     return info;

@@ -3,6 +3,7 @@
 #include "screen_detector.h"
 #include "output_controller.h"
 #include "theme_icon_provider.h"
+#include "screen_grabber.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -33,8 +34,8 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
         QProcess proc;
         proc.setStandardOutputFile(QProcess::nullDevice());
         proc.setStandardErrorFile(QProcess::nullDevice());
-        proc.start("hyprctl", {"eval", "layerrule = noanim, drmenu"});
-        proc.waitForFinished(100);
+        proc.start("hyprctl", {"eval", "hl.layer_rule({ match = { namespace = 'drmenu' }, no_anim = true })"});
+        proc.waitForFinished(80);
     }
 
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
@@ -49,7 +50,9 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
         : TargetScreenInfo{};
 
     QQmlApplicationEngine engine;
+    ScreenGrabber screenGrabber;
     engine.rootContext()->setContextProperty("output", &output);
+    engine.rootContext()->setContextProperty("screenGrabber", &screenGrabber);
 
     const QUrl url(QStringLiteral("qrc:/drmenu/src/qml/main.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
@@ -96,6 +99,7 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
     }, Qt::QueuedConnection);
 
     engine.addImageProvider(QStringLiteral("icon"), new ThemeIconProvider);
+    engine.addImageProvider(QStringLiteral("screengrab"), new ScreenGrabProvider(&screenGrabber));
     engine.load(url);
     return app.exec();
 }
