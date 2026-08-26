@@ -308,6 +308,35 @@ void ScreenGrabber::workerLoop() {
     }
 }
 
+// Feedback-stable vibrancy boost (contractive fixed-point in HSV saturation space)
+static inline QRgb applyStableVibrancy(QRgb pixel, qreal vibrancy) {
+    if (vibrancy <= 1.0) return pixel;
+
+    int r = qRed(pixel);
+    int g = qGreen(pixel);
+    int b = qBlue(pixel);
+    int a = qAlpha(pixel);
+
+    int maxC = qMax(r, qMax(g, b));
+    int minC = qMin(r, qMin(g, b));
+    int delta = maxC - minC;
+
+    if (delta == 0 || maxC == 0) return pixel;
+
+    // Saturation in [0, 255]
+    int sat = (delta * 255) / maxC;
+    // Bounded target saturation (maximum ceiling of 235 prevents primary saturation blowout)
+    int targetSat = qBound(0, int(sat * vibrancy), 235);
+    if (targetSat <= sat) return pixel;
+
+    int scale = (targetSat * 256) / sat;
+    int newR = qBound(0, maxC - ((maxC - r) * scale) / 256, 255);
+    int newG = qBound(0, maxC - ((maxC - g) * scale) / 256, 255);
+    int newB = qBound(0, maxC - ((maxC - b) * scale) / 256, 255);
+
+    return qRgba(newR, newG, newB, a);
+}
+
 QImage ScreenGrabber::applyFastBlur(const QImage &src, int blurRadius, qreal vibrancy, int chromaticShift) {
     if (src.isNull()) return src;
 
@@ -345,19 +374,13 @@ QImage ScreenGrabber::applyFastBlur(const QImage &src, int blurRadius, qreal vib
             : small;
     }
 
-    // Pass 2: Apple Vibrancy color lift (chroma saturation enhancement)
-    if (vibrancy > 0.0 && vibrancy != 1.0) {
+    // Pass 2: Apple Vibrancy color lift (Feedback-stable bounded saturation)
+    if (vibrancy > 1.0) {
         blurred = blurred.convertToFormat(QImage::Format_ARGB32);
-        uchar *bits = blurred.bits();
-        int byteCount = blurred.sizeInBytes();
-        for (int i = 0; i < byteCount; i += 4) {
-            int b = bits[i];
-            int g = bits[i + 1];
-            int rCol = bits[i + 2];
-            int gray = (rCol * 77 + g * 151 + b * 28) >> 8;
-            bits[i]     = (uchar)qBound(0, int(gray + (b - gray) * vibrancy), 255);
-            bits[i + 1] = (uchar)qBound(0, int(gray + (g - gray) * vibrancy), 255);
-            bits[i + 2] = (uchar)qBound(0, int(gray + (rCol - gray) * vibrancy), 255);
+        QRgb *bits = reinterpret_cast<QRgb*>(blurred.bits());
+        int pixelCount = w * h;
+        for (int i = 0; i < pixelCount; ++i) {
+            bits[i] = applyStableVibrancy(bits[i], vibrancy);
         }
     }
 

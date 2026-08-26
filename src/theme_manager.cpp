@@ -577,10 +577,10 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["showGuideRing"]        = false;
         style["showPointerLine"]      = false;
     } else if (name == "liquid-glass" || name == "apple-liquid" || name == "liquid" || name == "liquid-dark") {
-        style["useScreencopyGlass"]   = true;
-        style["screencopyBlurRadius"] = 7;
-        style["screencopyVibrancy"]   = 1.45; // Enhanced WWDC 2025/2026 Liquid Glass vibrancy
-        style["chromaticAberration"]  = 6;    // Enhanced 2D Liquid Chromatic Prism Dispersion
+        style["useScreencopyGlass"]   = false;
+        style["screencopyBlurRadius"] = 0;
+        style["screencopyVibrancy"]   = 1.0;
+        style["chromaticAberration"]  = 0;
         style["backgroundColor"]      = "#000000";
         style["backgroundOpacity"]    = 0.0;
         style["pillColor"]            = "#4214141c"; // Fluid deep liquid tint
@@ -611,9 +611,9 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["showGuideRing"]        = false;
         style["showPointerLine"]      = false;
     } else if (name == "liquid-glass-light" || name == "liquid-light") {
-        style["useScreencopyGlass"]   = true;
-        style["screencopyBlurRadius"] = 7;
-        style["screencopyVibrancy"]   = 1.25;
+        style["useScreencopyGlass"]   = false;
+        style["screencopyBlurRadius"] = 0;
+        style["screencopyVibrancy"]   = 1.0;
         style["backgroundColor"]      = "#ffffff";
         style["backgroundOpacity"]    = 0.0;
         style["pillColor"]            = "#75fcfcfd"; // Fluid milky light glass

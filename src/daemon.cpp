@@ -67,7 +67,7 @@ int DaemonServer::run(int argc, char *argv[]) {
         QProcess proc;
         proc.setStandardOutputFile(QProcess::nullDevice());
         proc.setStandardErrorFile(QProcess::nullDevice());
-        proc.start("hyprctl", {"eval", "hl.layer_rule({ match = { namespace = 'drmenu' }, no_anim = true })"});
+        proc.start("hyprctl", {"eval", "hl.layer_rule({ match = { namespace = 'drmenu' }, blur = true, ignore_alpha = 0.5, no_anim = true })"});
         proc.waitForFinished(80);
     }
 
