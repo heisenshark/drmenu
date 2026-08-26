@@ -254,11 +254,25 @@ static GLuint g_triVao = 0;
 static GLuint g_triVbo = 0;
 
 static const char* TRI_STATE_FILE = "/tmp/hypr_liquid_glass_tris.bin";
+static std::atomic<int> g_activeTriangleCount{0};
+
+static void updateActiveCountFromFile() {
+    FILE* f = fopen(TRI_STATE_FILE, "rb");
+    if (!f) { g_activeTriangleCount.store(0); return; }
+    uint32_t count = 0;
+    if (fread(&count, sizeof(count), 1, f) == 1) {
+        g_activeTriangleCount.store((int)count);
+    } else {
+        g_activeTriangleCount.store(0);
+    }
+    fclose(f);
+}
 
 static void writeTrianglesToFile(const std::vector<OverlayTriangle>& tris) {
     FILE* f = fopen(TRI_STATE_FILE, "wb");
     if (!f) return;
     uint32_t count = tris.size();
+    g_activeTriangleCount.store((int)count);
     fwrite(&count, sizeof(count), 1, f);
     if (count > 0)
         fwrite(tris.data(), sizeof(OverlayTriangle), count, f);
@@ -556,6 +570,7 @@ static int luaClear(lua_State* L) {
 }
 
 static void forceFrames() {
+    updateActiveCountFromFile();
     if (State::monitorState()) {
         for (auto& mon : State::monitorState()->monitors()) {
             if (mon && mon->m_enabled) {
@@ -584,12 +599,7 @@ static bool hasActiveShapes() {
         std::lock_guard<std::mutex> lock(g_pillMutex);
         if (!g_pills.empty()) return true;
     }
-    FILE* f = fopen(TRI_STATE_FILE, "rb");
-    if (!f) return false;
-    uint32_t count = 0;
-    bool hasTris = (fread(&count, sizeof(count), 1, f) == 1 && count > 0);
-    fclose(f);
-    return hasTris;
+    return g_activeTriangleCount.load() > 0;
 }
 
 static CHyprSignalListener g_renderStageListener;
@@ -629,7 +639,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     g_renderStageListener = Event::bus()->m_events.render.stage.registerListener([](std::any d) {
         try {
             eRenderStage stage = std::any_cast<eRenderStage>(d);
-            if (stage == RENDER_LAST_MOMENT) {
+            if (stage == RENDER_POST_WINDOWS || stage == RENDER_LAST_MOMENT) {
                 renderLiquidGlassPills(nullptr);
                 renderTriangles(nullptr);
             }
