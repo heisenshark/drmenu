@@ -72,6 +72,7 @@ int DaemonServer::run(int argc, char *argv[]) {
     }
 
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 

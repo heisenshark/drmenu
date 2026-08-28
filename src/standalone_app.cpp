@@ -39,6 +39,7 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
     }
 
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 

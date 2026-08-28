@@ -1,8 +1,7 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Shapes
 
-ApplicationWindow {
+Window {
     id: root
     visible: false
     width: Screen.width

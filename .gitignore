@@ -14,7 +14,7 @@ build-arch/
 
 # Arch Linux makepkg outputs
 pkg/
-src/
+build-arch/
 *.pkg.tar.zst
 
 

@@ -27,6 +27,7 @@ stdenv.mkDerivation {
     qt6.qtdeclarative
     qt6.qtsvg
     kdePackages.layer-shell-qt
+    kdePackages.kirigami
   ];
 
   cmakeFlags = [
