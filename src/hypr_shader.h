@@ -27,7 +27,8 @@ public:
                          float chromaticAberration = 14.0f,
                          float blurRadius = 8.0f,
                          float vibrancy = 1.45f,
-                         float refraction = 0.008f);
+                         float refraction = 0.008f,
+                         float specular = 0.70f);
 
     static void deactivate();
     static QString ping();

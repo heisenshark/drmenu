@@ -760,8 +760,11 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         if (key == "chromaticOpacity")       style["chromatic_opacity"]    = val;
         if (key == "chromatic_border_width") style["chromaticBorderWidth"] = val;
         if (key == "chromaticBorderWidth")   style["chromatic_border_width"] = val;
-        if (key == "specular_strength")      style["specularStrength"]     = val;
-        if (key == "specularStrength")       style["specular_strength"]    = val;
+        if (key == "specular" || key == "specular_strength" || key == "specularStrength") {
+            style["specularStrength"]  = val;
+            style["specular_strength"] = val;
+            style["specular"]          = val;
+        }
         if (key == "blur_strength")          style["blurStrength"]         = val;
         if (key == "blurStrength")           style["blur_strength"]        = val;
         if (key == "refraction_strength")    style["refractionStrength"]   = val;

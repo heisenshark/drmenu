@@ -252,6 +252,9 @@ Window {
         let refr = (root.s.refractionStrength !== undefined) ? root.s.refractionStrength
                  : ((root.s.refraction_strength !== undefined) ? root.s.refraction_strength
                  : ((root.s.refraction !== undefined) ? root.s.refraction : 0.85))
+        let spec = (root.s.specular !== undefined) ? root.s.specular
+                 : ((root.s.specularStrength !== undefined) ? root.s.specularStrength
+                 : ((root.s.specular_strength !== undefined) ? root.s.specular_strength : 0.70))
 
         let count = menuModel.count
         if (count <= 0) return
@@ -329,7 +332,7 @@ Window {
             borderWidth: 1.0
         })
 
-        output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr)
+        output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr, spec)
     }
 
     function triggerScreenCapture() {

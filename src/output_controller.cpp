@@ -57,7 +57,8 @@ void OutputController::activateGlassShader(int screenW, int screenH, float cente
                                            float chromaticAberration,
                                            float blurRadius,
                                            float vibrancy,
-                                           float refraction) {
+                                           float refraction,
+                                           float specular) {
     QList<PillGeometry> pills;
     for (const QVariant &v : pillsList) {
         QVariantMap m = v.toMap();
@@ -93,7 +94,7 @@ void OutputController::activateGlassShader(int screenW, int screenH, float cente
         pills.append(p);
     }
     HyprlandGlassShader::activate(screenW, screenH, centerX, centerY, pills,
-                                  chromaticAberration, blurRadius, vibrancy, refraction);
+                                  chromaticAberration, blurRadius, vibrancy, refraction, specular);
 }
 
 void OutputController::deactivateGlassShader() {

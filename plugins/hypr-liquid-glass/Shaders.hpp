@@ -121,9 +121,15 @@ void main() {
         col = mix(col, u_milky_tint.rgb, u_milky_tint.a);
     }
 
-    // Specular Fresnel gloss sheen on top edge
-    float specular = clamp((0.5 - p.y / halfSize.y), 0.0, 1.0) * (1.0 - edgeFactor) * u_specular_strength;
-    col += vec3(specular * 0.30);
+    // Specular Fresnel gloss sheen
+    if (u_specular_strength > 0.001) {
+        vec2 lightDir = normalize(vec2(-0.35, -0.93));
+        float nDotL = max(0.0, dot(normal, -lightDir));
+        float topBias = pow(clamp(-p.y / halfSize.y, 0.0, 1.0), 1.5);
+        float fresnel = pow(1.0 - edgeFactor, 2.0);
+        float specHighlight = (topBias * 0.7 + nDotL * fresnel * 0.8) * u_specular_strength;
+        col += vec3(1.0, 0.98, 0.95) * specHighlight;
+    }
 
     // Liquid glass rim border
     if (u_border_width > 0.0 && u_border_color.a > 0.0) {
