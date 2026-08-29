@@ -268,16 +268,21 @@ Window {
             for (let i = 0; i < count; ++i) {
                 let pItem = pillRepeater.itemAt(i)
                 if (pItem && pItem.width > 0 && pItem.height > 0) {
-                    let pw = pItem.width
-                    let ph = pItem.height
-                    let px = pItem.x + pw / 2.0
-                    let py = pItem.y + ph / 2.0
+                    let s = (typeof pItem.scale === "number") ? pItem.scale : 1.0
+                    let pw = pItem.width * s
+                    let ph = pItem.height * s
+                    let px = pItem.x + pItem.width / 2.0
+                    let py = pItem.y + pItem.height / 2.0
+                    let isHov = (menuContainer.hoveredIndex === i)
                     pills.push({
                         x: px,
                         y: py,
                         halfWidth: pw / 2.0,
                         halfHeight: ph / 2.0,
-                        radius: pRad
+                        radius: pRad * s,
+                        pillColor: isHov ? (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff") : (root.s.pillColor || root.s.pill_color || "#20ffffff"),
+                        borderColor: isHov ? (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff") : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff"),
+                        borderWidth: isHov ? (root.s.borderHoverWidth || root.s.border_hover_width || 2.0) : (root.s.borderWidth || root.s.border_width || 1.0)
                     })
                 }
             }
@@ -288,6 +293,8 @@ Window {
             pills = []
             for (let i = 0; i < count; ++i) {
                 let angle = root.getItemAngleRad(i, count)
+                let isHov = (menuContainer.hoveredIndex === i)
+                let s = isHov ? 1.09 : 1.0
                 let px = cx + Math.cos(angle) * rDist
                 let py = cy + Math.sin(angle) * rDist
                 let itemObj = menuModel.get(i)
@@ -296,13 +303,17 @@ Window {
                 let iconW = hasIcon ? ((root.s.iconSize || 22) + 7) : 0
                 let badgeW = (root.s.showNumberBadges !== false) ? 18 : 0
                 let textW = labelText.length * 8.5
-                let totalW = Math.max(70.0, iconW + badgeW + textW + 28.0)
+                let totalW = Math.max(70.0, iconW + badgeW + textW + 28.0) * s
+                let totalH = (root.s.pillHeight || 42) * s
                 pills.push({
                     x: px,
                     y: py,
                     halfWidth: totalW / 2.0,
-                    halfHeight: pHalfH,
-                    radius: pRad
+                    halfHeight: totalH / 2.0,
+                    radius: pRad * s,
+                    pillColor: isHov ? (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff") : (root.s.pillColor || root.s.pill_color || "#20ffffff"),
+                    borderColor: isHov ? (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff") : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff"),
+                    borderWidth: isHov ? (root.s.borderHoverWidth || root.s.border_hover_width || 2.0) : (root.s.borderWidth || root.s.border_width || 1.0)
                 })
             }
         }
@@ -312,7 +323,10 @@ Window {
             y: cy,
             halfWidth: 24.0,
             halfHeight: 24.0,
-            radius: 24.0
+            radius: 24.0,
+            pillColor: root.s.centerColor || "transparent",
+            borderColor: root.s.centerBorder || "transparent",
+            borderWidth: 1.0
         })
 
         output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr)
@@ -459,6 +473,7 @@ Window {
         onCenterYChanged: root.updateGlassOptics()
         property int  itemCount:            menuModel.count
         property int  hoveredIndex:         -1
+        onHoveredIndexChanged: root.updateGlassOptics()
         property real currentMouseAngleDeg: 0
 
         // ── Dim background ───────────────────────────────────────────────────────

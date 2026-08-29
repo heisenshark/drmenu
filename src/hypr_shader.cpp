@@ -183,7 +183,15 @@ void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
            << QString::number(refr, 'f', 2) << " "
            << QString::number(chrom, 'f', 2) << " "
            << QString::number(spec, 'f', 2) << " "
-           << "1.0 1.0 1.0 0.12 1.0 1.0 1.0 0.40 1.5;";
+           << QString::number(p.milkyR, 'f', 2) << " "
+           << QString::number(p.milkyG, 'f', 2) << " "
+           << QString::number(p.milkyB, 'f', 2) << " "
+           << QString::number(p.milkyA, 'f', 2) << " "
+           << QString::number(p.borderR, 'f', 2) << " "
+           << QString::number(p.borderG, 'f', 2) << " "
+           << QString::number(p.borderB, 'f', 2) << " "
+           << QString::number(p.borderA, 'f', 2) << " "
+           << QString::number(p.borderWidth, 'f', 2) << ";";
     }
 
     std::string luaCall = "/repl return (hl.plugin and hl.plugin.liquid_glass and hl.plugin.liquid_glass.set_pills) and hl.plugin.liquid_glass.set_pills([[" + pillData.toStdString() + "]])";

@@ -43,6 +43,9 @@ Item {
     onHeightChanged: {
         if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
     }
+    onScaleChanged: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
     Component.onCompleted: {
         if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
     }
@@ -70,6 +73,11 @@ Item {
         }
 
         color: {
+            if (rootRef.s.pillColor !== undefined || rootRef.s.pill_color !== undefined) {
+                return pillDelegate.isHovered
+                    ? (rootRef.s.pillHoverColor || rootRef.s.pill_hover_color || "transparent")
+                    : (rootRef.s.pillColor || rootRef.s.pill_color || "transparent")
+            }
             if (rootRef.s.useGlass === true || rootRef.s.useScreencopyGlass === true || rootRef.s.glass === true) {
                 return pillDelegate.isHovered ? "#30ffffff" : "#12ffffff"
             }
@@ -79,6 +87,11 @@ Item {
         }
 
         border.color: {
+            if (rootRef.s.borderColor !== undefined || rootRef.s.border_color !== undefined || rootRef.s.pillBorderColor !== undefined) {
+                return pillDelegate.isHovered
+                    ? (rootRef.s.borderHoverColor || rootRef.s.border_hover_color || rootRef.s.pillBorderHoverColor || "transparent")
+                    : (rootRef.s.borderColor || rootRef.s.border_color || rootRef.s.pillBorderColor || "transparent")
+            }
             if (rootRef.s.useGlass === true || rootRef.s.useScreencopyGlass === true || rootRef.s.glass === true) {
                 return pillDelegate.isHovered ? "#80ffffff" : "#38ffffff"
             }

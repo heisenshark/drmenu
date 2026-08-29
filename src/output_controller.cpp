@@ -50,6 +50,7 @@ QVariantMap OutputController::getMousePosition() {
 }
 
 #include "hypr_shader.h"
+#include <QColor>
 
 void OutputController::activateGlassShader(int screenW, int screenH, float centerX, float centerY,
                                            const QVariantList &pillsList,
@@ -66,6 +67,29 @@ void OutputController::activateGlassShader(int screenW, int screenH, float cente
         p.halfWidth = m["halfWidth"].toFloat();
         p.halfHeight = m["halfHeight"].toFloat();
         p.radius = m["radius"].toFloat();
+
+        if (m.contains("pillColor")) {
+            QColor c(m["pillColor"].toString());
+            if (c.isValid()) {
+                p.milkyR = c.redF();
+                p.milkyG = c.greenF();
+                p.milkyB = c.blueF();
+                p.milkyA = c.alphaF();
+            }
+        }
+        if (m.contains("borderColor")) {
+            QColor bc(m["borderColor"].toString());
+            if (bc.isValid()) {
+                p.borderR = bc.redF();
+                p.borderG = bc.greenF();
+                p.borderB = bc.blueF();
+                p.borderA = bc.alphaF();
+            }
+        }
+        if (m.contains("borderWidth")) {
+            p.borderWidth = m["borderWidth"].toFloat();
+        }
+
         pills.append(p);
     }
     HyprlandGlassShader::activate(screenW, screenH, centerX, centerY, pills,
