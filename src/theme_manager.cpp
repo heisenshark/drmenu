@@ -832,9 +832,32 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         if (key == "pill_hover_color")       style["pillHoverColor"]       = val;
         if (key == "pillHoverColor")         style["pill_hover_color"]     = val;
         if (key == "border_color")           style["pillBorderColor"]      = val;
-        if (key == "border_hover_color")     style["pillBorderHoverColor"] = val;
         if (key == "border_width")           style["borderWidth"]          = val;
         if (key == "border_hover_width")     style["borderHoverWidth"]     = val;
+        if (key == "blur_hover" || key == "blurHover" || key == "blur_strength_hover" || key == "blurStrengthHover" || key == "blur_radius_hover" || key == "blurRadiusHover") {
+            style["blurHover"]           = val;
+            style["blur_hover"]          = val;
+            style["blurStrengthHover"]   = val;
+            style["blur_strength_hover"] = val;
+        }
+        if (key == "refraction_hover" || key == "refractionHover" || key == "refraction_strength_hover" || key == "refractionStrengthHover") {
+            style["refractionHover"]           = val;
+            style["refraction_hover"]          = val;
+            style["refractionStrengthHover"]   = val;
+            style["refraction_strength_hover"] = val;
+        }
+        if (key == "chromatic_hover" || key == "chromaticHover" || key == "chromatic_aberration_hover" || key == "chromaticAberrationHover") {
+            style["chromaticHover"]             = val;
+            style["chromatic_hover"]            = val;
+            style["chromaticAberrationHover"]   = val;
+            style["chromatic_aberration_hover"] = val;
+        }
+        if (key == "specular_hover" || key == "specularHover" || key == "specular_strength_hover" || key == "specularStrengthHover") {
+            style["specularHover"]           = val;
+            style["specular_hover"]          = val;
+            style["specularStrengthHover"]   = val;
+            style["specular_strength_hover"] = val;
+        }
     }
 
     return style;

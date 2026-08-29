@@ -242,19 +242,40 @@ Window {
         let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration
                   : ((root.s.chromatic_aberration !== undefined) ? root.s.chromatic_aberration
                   : ((root.s.chromatic !== undefined) ? root.s.chromatic : 1.4))
+        let chromHover = (root.s.chromaticHover !== undefined) ? root.s.chromaticHover
+                       : ((root.s.chromatic_hover !== undefined) ? root.s.chromatic_hover
+                       : ((root.s.chromaticAberrationHover !== undefined) ? root.s.chromaticAberrationHover
+                       : ((root.s.chromatic_aberration_hover !== undefined) ? root.s.chromatic_aberration_hover : chrom)))
+
         let blurRad = (root.s.blur !== undefined) ? root.s.blur
                     : ((root.s.blurStrength !== undefined) ? root.s.blurStrength
                     : ((root.s.blur_strength !== undefined) ? root.s.blur_strength
                     : ((root.s.blurRadius !== undefined) ? root.s.blurRadius
                     : ((root.s.blur_radius !== undefined) ? root.s.blur_radius
                     : ((root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 24.0)))))
+        let blurHover = (root.s.blurHover !== undefined) ? root.s.blurHover
+                      : ((root.s.blur_hover !== undefined) ? root.s.blur_hover
+                      : ((root.s.blurStrengthHover !== undefined) ? root.s.blurStrengthHover
+                      : ((root.s.blur_strength_hover !== undefined) ? root.s.blur_strength_hover
+                      : ((root.s.blurRadiusHover !== undefined) ? root.s.blurRadiusHover : blurRad))))
+
         let vib = (root.s.vibrancy !== undefined) ? root.s.vibrancy : 1.15
+
         let refr = (root.s.refractionStrength !== undefined) ? root.s.refractionStrength
                  : ((root.s.refraction_strength !== undefined) ? root.s.refraction_strength
                  : ((root.s.refraction !== undefined) ? root.s.refraction : 0.85))
+        let refrHover = (root.s.refractionHover !== undefined) ? root.s.refractionHover
+                      : ((root.s.refraction_hover !== undefined) ? root.s.refraction_hover
+                      : ((root.s.refractionStrengthHover !== undefined) ? root.s.refractionStrengthHover
+                      : ((root.s.refraction_strength_hover !== undefined) ? root.s.refraction_strength_hover : refr)))
+
         let spec = (root.s.specular !== undefined) ? root.s.specular
                  : ((root.s.specularStrength !== undefined) ? root.s.specularStrength
                  : ((root.s.specular_strength !== undefined) ? root.s.specular_strength : 0.70))
+        let specHover = (root.s.specularHover !== undefined) ? root.s.specularHover
+                      : ((root.s.specular_hover !== undefined) ? root.s.specular_hover
+                      : ((root.s.specularStrengthHover !== undefined) ? root.s.specularStrengthHover
+                      : ((root.s.specular_strength_hover !== undefined) ? root.s.specular_strength_hover : spec)))
 
         let count = menuModel.count
         if (count <= 0) return
@@ -294,6 +315,10 @@ Window {
                         halfWidth: pw / 2.0,
                         halfHeight: ph / 2.0,
                         radius: pRad * s,
+                        blur: isHov ? blurHover : blurRad,
+                        refraction: isHov ? refrHover : refr,
+                        chromatic: isHov ? chromHover : chrom,
+                        specular: isHov ? specHover : spec,
                         pillColor: pCol,
                         borderColor: bCol,
                         borderWidth: isHov ? (root.s.borderHoverWidth || root.s.border_hover_width || 2.0) : (root.s.borderWidth || root.s.border_width || 1.0)
@@ -336,6 +361,10 @@ Window {
                     halfWidth: totalW / 2.0,
                     halfHeight: totalH / 2.0,
                     radius: pRad * s,
+                    blur: isHov ? blurHover : blurRad,
+                    refraction: isHov ? refrHover : refr,
+                    chromatic: isHov ? chromHover : chrom,
+                    specular: isHov ? specHover : spec,
                     pillColor: pCol,
                     borderColor: bCol,
                     borderWidth: isHov ? (root.s.borderHoverWidth || root.s.border_hover_width || 2.0) : (root.s.borderWidth || root.s.border_width || 1.0)
@@ -344,17 +373,22 @@ Window {
         }
 
         let centerRad = (root.s.centerRadius !== undefined) ? root.s.centerRadius : (root.s.torusRadius !== undefined ? root.s.torusRadius : 20.0)
+        let isCenterHov = (menuContainer.hoveredIndex === -1)
         pills.push({
             x: cx,
             y: cy,
             halfWidth: centerRad,
             halfHeight: centerRad,
             radius: centerRad,
-            pillColor: root.s.centerColor || "#20ffffff",
+            blur: isCenterHov ? blurHover : blurRad,
+            refraction: isCenterHov ? refrHover : refr,
+            chromatic: isCenterHov ? chromHover : chrom,
+            specular: isCenterHov ? specHover : spec,
+            pillColor: (root.s.centerColor !== undefined) ? root.s.centerColor : "transparent",
             borderColor: (menuContainer.hoveredIndex !== -1)
-                ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || root.s.accentColor || "#a0ffffff")
-                : (root.hasParent ? (root.s.submenuAccent || "#bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || "#50ffffff")),
-            borderWidth: (root.s.centerBorderWidth !== undefined) ? root.s.centerBorderWidth : 1.5
+                ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || "transparent")
+                : (root.hasParent ? (root.s.submenuAccent || "#80bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || "#40ffffff")),
+            borderWidth: (root.s.centerBorderWidth !== undefined) ? root.s.centerBorderWidth : 1.0
         })
 
         output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr, spec)

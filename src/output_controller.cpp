@@ -90,6 +90,18 @@ void OutputController::activateGlassShader(int screenW, int screenH, float cente
         if (m.contains("borderWidth")) {
             p.borderWidth = m["borderWidth"].toFloat();
         }
+        if (m.contains("blur")) {
+            p.blur = m["blur"].toFloat();
+        }
+        if (m.contains("refraction")) {
+            p.refraction = m["refraction"].toFloat();
+        }
+        if (m.contains("chromatic")) {
+            p.chromatic = m["chromatic"].toFloat();
+        }
+        if (m.contains("specular")) {
+            p.specular = m["specular"].toFloat();
+        }
 
         pills.append(p);
     }

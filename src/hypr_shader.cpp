@@ -169,10 +169,10 @@ void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
         float pw = p.halfWidth * 2.0f;
         float ph = p.halfHeight * 2.0f;
         float rad = p.radius > 0.0f ? p.radius : 18.0f;
-        float blur = (blurRadius >= 0.0f) ? blurRadius : 24.0f;
-        float refr = (refraction >= 0.0f) ? refraction : 0.85f;
-        float chrom = (chromaticAberration >= 0.0f) ? chromaticAberration : 1.4f;
-        float spec = (specular >= 0.0f) ? specular : 0.70f;
+        float blur = (p.blur >= 0.0f) ? p.blur : ((blurRadius >= 0.0f) ? blurRadius : 24.0f);
+        float refr = (p.refraction >= 0.0f) ? p.refraction : ((refraction >= 0.0f) ? refraction : 0.85f);
+        float chrom = (p.chromatic >= 0.0f) ? p.chromatic : ((chromaticAberration >= 0.0f) ? chromaticAberration : 1.4f);
+        float spec = (p.specular >= 0.0f) ? p.specular : ((specular >= 0.0f) ? specular : 0.70f);
 
         // format: x y w h radius blur refr chrom spec milkyR milkyG milkyB milkyA borderR borderG borderB borderA borderW;
         ss << QString::number(px, 'f', 2) << " "

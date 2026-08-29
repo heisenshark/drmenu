@@ -12,6 +12,10 @@ struct PillGeometry {
     float halfWidth = 0;
     float halfHeight = 0;
     float radius = 0;
+    float blur = -1.0f;
+    float refraction = -1.0f;
+    float chromatic = -1.0f;
+    float specular = -1.0f;
     float milkyR = 1.0f, milkyG = 1.0f, milkyB = 1.0f, milkyA = 0.12f;
     float borderR = 1.0f, borderG = 1.0f, borderB = 1.0f, borderA = 0.40f;
     float borderWidth = 1.5f;
