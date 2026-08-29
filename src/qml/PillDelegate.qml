@@ -73,6 +73,12 @@ Item {
         }
 
         color: {
+            let useSubAccent = (rootRef.s.showSubmenuAccent !== false) && (rootRef.s.useSubmenuAccent !== false) && (rootRef.s.submenuAccent !== "transparent") && (rootRef.s.submenuAccent !== "none")
+            if (pillDelegate.isSubmenu && useSubAccent && (rootRef.s.pillSubmenuColor !== undefined || rootRef.s.pillSubmenuHoverColor !== undefined)) {
+                return pillDelegate.isHovered
+                    ? (rootRef.s.pillSubmenuHoverColor || rootRef.s.pillHoverColor || "transparent")
+                    : (rootRef.s.pillSubmenuColor || rootRef.s.pillColor || "transparent")
+            }
             if (rootRef.s.pillColor !== undefined || rootRef.s.pill_color !== undefined) {
                 return pillDelegate.isHovered
                     ? (rootRef.s.pillHoverColor || rootRef.s.pill_hover_color || "transparent")
@@ -82,11 +88,17 @@ Item {
                 return pillDelegate.isHovered ? "#30ffffff" : "#12ffffff"
             }
             return pillDelegate.isHovered
-                ? (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuHoverColor || "#2a2438") : (rootRef.s.pillHoverColor || "#2b2b36"))
-                : (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuColor || "#18151f") : (rootRef.s.pillColor || "#1a1a20"))
+                ? (pillDelegate.isSubmenu && useSubAccent ? (rootRef.s.pillSubmenuHoverColor || "#2a2438") : (rootRef.s.pillHoverColor || "#2b2b36"))
+                : (pillDelegate.isSubmenu && useSubAccent ? (rootRef.s.pillSubmenuColor || "#18151f") : (rootRef.s.pillColor || "#1a1a20"))
         }
 
         border.color: {
+            let useSubAccent = (rootRef.s.showSubmenuAccent !== false) && (rootRef.s.useSubmenuAccent !== false) && (rootRef.s.submenuAccent !== "transparent") && (rootRef.s.submenuAccent !== "none")
+            if (pillDelegate.isSubmenu && useSubAccent && (rootRef.s.pillSubmenuBorder !== undefined || rootRef.s.pillSubmenuBorderHover !== undefined)) {
+                return pillDelegate.isHovered
+                    ? (rootRef.s.pillSubmenuBorderHover || rootRef.s.borderHoverColor || rootRef.s.pillBorderHoverColor || "transparent")
+                    : (rootRef.s.pillSubmenuBorder || rootRef.s.borderColor || rootRef.s.pillBorderColor || "transparent")
+            }
             if (rootRef.s.borderColor !== undefined || rootRef.s.border_color !== undefined || rootRef.s.pillBorderColor !== undefined) {
                 return pillDelegate.isHovered
                     ? (rootRef.s.borderHoverColor || rootRef.s.border_hover_color || rootRef.s.pillBorderHoverColor || "transparent")
@@ -96,8 +108,8 @@ Item {
                 return pillDelegate.isHovered ? "#80ffffff" : "#38ffffff"
             }
             return pillDelegate.isHovered
-                ? (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuBorderHover || "#a855f7") : (rootRef.s.pillBorderHoverColor || "#e67e22"))
-                : (pillDelegate.isSubmenu ? (rootRef.s.pillSubmenuBorder || "#4a3060") : (rootRef.s.pillBorderColor || "#383842"))
+                ? (pillDelegate.isSubmenu && useSubAccent ? (rootRef.s.pillSubmenuBorderHover || "#a855f7") : (rootRef.s.pillBorderHoverColor || "#e67e22"))
+                : (pillDelegate.isSubmenu && useSubAccent ? (rootRef.s.pillSubmenuBorder || "#4a3060") : (rootRef.s.pillBorderColor || "#383842"))
         }
 
         border.width: pillDelegate.isHovered
@@ -218,9 +230,20 @@ Item {
             anchors.fill: parent
             anchors.margins: pillBody.border.width
             radius: Math.max(0, pillBody.radius - pillBody.border.width)
-            visible: pillDelegate.isHovered
-            opacity: pillDelegate.isHovered ? 0.30 : 0.0
-            color: pillDelegate.isSubmenu ? (rootRef.s.submenuAccent || "#bf5af2") : (rootRef.s.accentColor || "#0a84ff")
+            visible: {
+                if (!pillDelegate.isHovered) return false
+                let useSubAccent = (rootRef.s.showSubmenuAccent !== false) && (rootRef.s.useSubmenuAccent !== false) && (rootRef.s.submenuAccent !== "transparent") && (rootRef.s.submenuAccent !== "none")
+                let col = (pillDelegate.isSubmenu && useSubAccent) ? (rootRef.s.submenuAccent || rootRef.s.accentColor || "#0a84ff") : (rootRef.s.accentColor || "#0a84ff")
+                return col !== "transparent" && col !== "none"
+            }
+            opacity: pillDelegate.isHovered ? (rootRef.s.causticOpacity !== undefined ? rootRef.s.causticOpacity : 0.30) : 0.0
+            color: {
+                let useSubAccent = (rootRef.s.showSubmenuAccent !== false) && (rootRef.s.useSubmenuAccent !== false) && (rootRef.s.submenuAccent !== "transparent") && (rootRef.s.submenuAccent !== "none")
+                if (pillDelegate.isSubmenu && useSubAccent) {
+                    return rootRef.s.submenuAccent || rootRef.s.accentColor || "#0a84ff"
+                }
+                return rootRef.s.accentColor || "#0a84ff"
+            }
             z: 0
             Behavior on opacity { NumberAnimation { duration: 60 } }
         }
@@ -263,9 +286,17 @@ Item {
                 font.family:    rootRef.s.fontFamily || "Sans"
                 font.pixelSize: pillDelegate.hasEmoji ? ((rootRef.s.fontSize || 13) + 4) : (rootRef.s.fontSize || 13)
                 font.bold:      !pillDelegate.hasEmoji
-                color: pillDelegate.isHovered
-                       ? (pillDelegate.isSubmenu ? (rootRef.s.submenuAccent || "#c084fc") : (rootRef.s.iconHoverColor || "#f39c12"))
-                       : (rootRef.s.iconColor || "#9090a0")
+                color: {
+                    let useSubAccent = (rootRef.s.showSubmenuAccent !== false) && (rootRef.s.useSubmenuAccent !== false) && (rootRef.s.submenuAccent !== "transparent") && (rootRef.s.submenuAccent !== "none")
+                    if (pillDelegate.isHovered) {
+                        if (pillDelegate.isSubmenu && useSubAccent && rootRef.s.submenuAccent) {
+                            return rootRef.s.submenuAccent
+                        }
+                        return rootRef.s.iconHoverColor || rootRef.s.icon_hover_color || rootRef.s.accentColor || "#ffffff"
+                    }
+                    if (pillDelegate.isSubmenu && useSubAccent && rootRef.s.submenuIconColor) return rootRef.s.submenuIconColor
+                    return rootRef.s.iconColor || rootRef.s.icon_color || "#9090a0"
+                }
                 anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -282,12 +313,18 @@ Item {
             }
 
             Text {
-                visible: pillDelegate.isSubmenu && pillDelegate.shapeType !== "circle"
+                visible: pillDelegate.isSubmenu && pillDelegate.shapeType !== "circle" && (rootRef.s.showSubmenuIndicator !== false)
                 text:    "▶"
                 font.pixelSize: Math.max(8, (rootRef.s.fontSize || 13) - 4)
-                color: pillDelegate.isHovered
-                       ? (rootRef.s.submenuAccent || "#c084fc")
-                       : (rootRef.s.pillSubmenuBorder || "#5a4070")
+                color: {
+                    let useSubAccent = (rootRef.s.showSubmenuAccent !== false) && (rootRef.s.useSubmenuAccent !== false) && (rootRef.s.submenuAccent !== "transparent") && (rootRef.s.submenuAccent !== "none")
+                    if (pillDelegate.isHovered) {
+                        if (useSubAccent && rootRef.s.submenuAccent) return rootRef.s.submenuAccent
+                        return rootRef.s.textHoverColor || "#ffffff"
+                    }
+                    if (useSubAccent && rootRef.s.pillSubmenuBorder && rootRef.s.pillSubmenuBorder !== "transparent") return rootRef.s.pillSubmenuBorder
+                    return rootRef.s.textColor || "#808090"
+                }
                 anchors.verticalCenter: parent.verticalCenter
                 leftPadding: 1
                 Behavior on color { ColorAnimation { duration: 40 } }

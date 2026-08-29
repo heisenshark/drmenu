@@ -277,14 +277,25 @@ Window {
                     let px = pItem.x + pItem.width / 2.0
                     let py = pItem.y + pItem.height / 2.0
                     let isHov = (menuContainer.hoveredIndex === i)
+                    let itemObj = menuModel.get(i)
+                    let isSub = itemObj && itemObj.submenuName && itemObj.submenuName !== ""
+                    let useSubAccent = isSub && (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
+
+                    let pCol = isHov
+                        ? (useSubAccent && root.s.pillSubmenuHoverColor ? root.s.pillSubmenuHoverColor : (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff"))
+                        : (useSubAccent && root.s.pillSubmenuColor ? root.s.pillSubmenuColor : (root.s.pillColor || root.s.pill_color || "#20ffffff"))
+                    let bCol = isHov
+                        ? (useSubAccent && root.s.pillSubmenuBorderHover ? root.s.pillSubmenuBorderHover : (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff"))
+                        : (useSubAccent && root.s.pillSubmenuBorder ? root.s.pillSubmenuBorder : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff"))
+
                     pills.push({
                         x: px,
                         y: py,
                         halfWidth: pw / 2.0,
                         halfHeight: ph / 2.0,
                         radius: pRad * s,
-                        pillColor: isHov ? (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff") : (root.s.pillColor || root.s.pill_color || "#20ffffff"),
-                        borderColor: isHov ? (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff") : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff"),
+                        pillColor: pCol,
+                        borderColor: bCol,
                         borderWidth: isHov ? (root.s.borderHoverWidth || root.s.border_hover_width || 2.0) : (root.s.borderWidth || root.s.border_width || 1.0)
                     })
                 }
@@ -301,6 +312,9 @@ Window {
                 let px = cx + Math.cos(angle) * rDist
                 let py = cy + Math.sin(angle) * rDist
                 let itemObj = menuModel.get(i)
+                let isSub = itemObj && itemObj.submenuName && itemObj.submenuName !== ""
+                let useSubAccent = isSub && (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
+
                 let labelText = (itemObj && itemObj.label) ? itemObj.label : ""
                 let hasIcon = (itemObj && ((itemObj.iconName && itemObj.iconName !== "") || (itemObj.icon && itemObj.icon !== "")))
                 let iconW = hasIcon ? ((root.s.iconSize || 22) + 7) : 0
@@ -308,14 +322,22 @@ Window {
                 let textW = labelText.length * 8.5
                 let totalW = Math.max(70.0, iconW + badgeW + textW + 28.0) * s
                 let totalH = (root.s.pillHeight || 42) * s
+
+                let pCol = isHov
+                    ? (useSubAccent && root.s.pillSubmenuHoverColor ? root.s.pillSubmenuHoverColor : (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff"))
+                    : (useSubAccent && root.s.pillSubmenuColor ? root.s.pillSubmenuColor : (root.s.pillColor || root.s.pill_color || "#20ffffff"))
+                let bCol = isHov
+                    ? (useSubAccent && root.s.pillSubmenuBorderHover ? root.s.pillSubmenuBorderHover : (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff"))
+                    : (useSubAccent && root.s.pillSubmenuBorder ? root.s.pillSubmenuBorder : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff"))
+
                 pills.push({
                     x: px,
                     y: py,
                     halfWidth: totalW / 2.0,
                     halfHeight: totalH / 2.0,
                     radius: pRad * s,
-                    pillColor: isHov ? (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff") : (root.s.pillColor || root.s.pill_color || "#20ffffff"),
-                    borderColor: isHov ? (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff") : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff"),
+                    pillColor: pCol,
+                    borderColor: bCol,
                     borderWidth: isHov ? (root.s.borderHoverWidth || root.s.border_hover_width || 2.0) : (root.s.borderWidth || root.s.border_width || 1.0)
                 })
             }
@@ -562,7 +584,10 @@ Window {
                 color: {
                     if (menuContainer.hoveredIndex === -1) return "transparent"
                     let item = menuModel.get(menuContainer.hoveredIndex)
-                    if (item && item.submenuName !== "") return root.s.submenuAccent || "#c084fc"
+                    if (item && item.submenuName !== "") {
+                        let useSub = (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
+                        if (useSub && root.s.submenuAccent) return root.s.submenuAccent
+                    }
                     return root.s.accentColor || "#e67e22"
                 }
             }
