@@ -19,7 +19,7 @@ Item {
     // ── Mode A: Solid Circle Center Pivot (Standard Pie Theme) ────────────────
     Rectangle {
         anchors.fill: parent
-        visible: !centerPivot.isBlenderMode
+        visible: !centerPivot.isBlenderMode && !(rootRef.s.glass === true || rootRef.s.useGlass === true)
         radius: width / 2
         color:  rootRef.s.centerColor || "#111116"
         border.color: (rootRef.s.centerBorderWidth === 0)

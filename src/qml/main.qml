@@ -321,15 +321,18 @@ Window {
             }
         }
 
+        let centerRad = (root.s.centerRadius !== undefined) ? root.s.centerRadius : (root.s.torusRadius !== undefined ? root.s.torusRadius : 20.0)
         pills.push({
             x: cx,
             y: cy,
-            halfWidth: 24.0,
-            halfHeight: 24.0,
-            radius: 24.0,
-            pillColor: root.s.centerColor || "transparent",
-            borderColor: root.s.centerBorder || "transparent",
-            borderWidth: 1.0
+            halfWidth: centerRad,
+            halfHeight: centerRad,
+            radius: centerRad,
+            pillColor: root.s.centerColor || "#20ffffff",
+            borderColor: (menuContainer.hoveredIndex !== -1)
+                ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || root.s.accentColor || "#a0ffffff")
+                : (root.hasParent ? (root.s.submenuAccent || "#bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || "#50ffffff")),
+            borderWidth: (root.s.centerBorderWidth !== undefined) ? root.s.centerBorderWidth : 1.5
         })
 
         output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr, spec)
