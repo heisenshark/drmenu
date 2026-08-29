@@ -44,6 +44,15 @@ float sdRoundedBox(vec2 p, vec2 b, float r) {
     return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
 }
 
+// True isotropic gradient normal of the signed distance field
+vec2 getSDFNormal(vec2 p, vec2 b, float r) {
+    const float eps = 0.5;
+    float dx = sdRoundedBox(p + vec2(eps, 0.0), b, r) - sdRoundedBox(p - vec2(eps, 0.0), b, r);
+    float dy = sdRoundedBox(p + vec2(0.0, eps), b, r) - sdRoundedBox(p - vec2(0.0, eps), b, r);
+    float len = length(vec2(dx, dy));
+    return len > 0.0001 ? vec2(dx, dy) / len : vec2(0.0);
+}
+
 void main() {
     vec2 pillSize = u_pill_rect.zw;
     vec2 halfSize = pillSize * 0.5;
@@ -60,19 +69,20 @@ void main() {
     // Exact hardware screen pixel from rasterizer
     vec2 screenUV = gl_FragCoord.xy / u_resolution;
 
-    // Normal gradient for convex refraction & chromatic dispersion
-    float edgeDist = -dist;
+    // True geometric SDF normal vector (points outward from pill perimeter)
+    vec2 normal = getSDFNormal(p, halfSize, u_corner_radius);
+
+    // Convex lens curvature profile: maximum refraction at outer rim, smoothly zero at center
+    float edgeDist = max(0.0, -dist);
     float edgeFactor = clamp(edgeDist / max(1.0, u_corner_radius), 0.0, 1.0);
-    vec2 normP = p / max(vec2(1.0), halfSize - u_corner_radius);
-    float normLen = length(normP);
-    vec2 normal = normLen > 0.001 ? normP / normLen : vec2(0.0);
+    float lensSlope = sin((1.0 - edgeFactor) * 1.57079632679);
 
-    // Refraction vector (bends texture coordinate near glass boundaries in screen space)
-    vec2 refr = (1.0 - edgeFactor) * u_refraction_strength * (10.0 / u_resolution);
-    vec2 refrUV = screenUV - normal * refr;
+    // Refraction vector (bends texture coordinate in screen space along true normal)
+    vec2 refr = normal * (lensSlope * u_refraction_strength * 14.0) / u_resolution;
+    vec2 refrUV = screenUV - refr;
 
-    // Chromatic dispersion offsets (separates R and B channels)
-    vec2 chromOffset = normal * (u_chromatic_aberration * 3.0) / u_resolution * (1.0 - edgeFactor * 0.5);
+    // Chromatic dispersion offsets along true normal
+    vec2 chromOffset = normal * (u_chromatic_aberration * 3.5 * lensSlope) / u_resolution;
 
     vec3 col = vec3(0.0);
 
