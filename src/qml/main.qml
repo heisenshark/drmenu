@@ -225,11 +225,15 @@ Window {
             menuContainer.opacity = 1.0
             openAnimation.start()
         }
+
+        function onStyleChanged() {
+            root.updateGlassOptics()
+        }
     }
 
     function updateGlassOptics() {
         if (typeof output === "undefined") return
-        let enableGlass = root.s && (root.s.glass === true || root.s.useGlass === true || root.s.useScreencopyGlass === true || (typeof root.s.theme === "string" && root.s.theme.indexOf("glass") >= 0))
+        let enableGlass = root.s && (root.s.glass === true || root.s.useGlass === true)
         if (!enableGlass) {
             output.deactivateGlassShader()
             return

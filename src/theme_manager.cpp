@@ -30,8 +30,12 @@ QStringList ThemeManager::availableThemes() {
 
 QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantMap &customOverrides) {
     QVariantMap style;
+    QString name = themeName.toLower().trimmed();
 
     // ── Default Theme (Blender Slate & Orange) ─────────────────────────────────
+    style["theme"]                = name;
+    style["glass"]                = (name.contains("glass") || name.contains("liquid") || name.contains("lens") || name == "visionos");
+    style["useGlass"]             = style["glass"];
     style["backgroundColor"]      = "#000000";
     style["backgroundOpacity"]    = 0.38;
     style["pillColor"]            = "#1a1a20";
@@ -67,8 +71,6 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
     style["showGuideRing"]        = true;
     style["showPointerLine"]      = true;
     style["showBreadcrumbs"]      = true;
-
-    QString name = themeName.toLower().trimmed();
 
     if (name == "pie" || name == "wheel") {
         style["layout"]               = "pie";
