@@ -50,9 +50,14 @@ Item {
         if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
     }
 
+    property int hDuration: (rootRef && rootRef.s && (rootRef.s.hoverDuration !== undefined)) ? rootRef.s.hoverDuration : 110
+    property int sDuration: (rootRef && rootRef.s && (rootRef.s.hoverScaleDuration !== undefined)) ? rootRef.s.hoverScaleDuration
+                           : ((rootRef && rootRef.s && (rootRef.s.scaleDuration !== undefined)) ? rootRef.s.scaleDuration
+                           : Math.max(40, Math.round(pillDelegate.hDuration * 0.82)))
+
     Behavior on scale {
         NumberAnimation {
-            duration: 90
+            duration: pillDelegate.sDuration
             easing.type: Easing.OutBack
             easing.overshoot: 1.18
         }
@@ -62,7 +67,7 @@ Item {
     property real hoverProgress: isHovered ? 1.0 : 0.0
     Behavior on hoverProgress {
         NumberAnimation {
-            duration: 110
+            duration: pillDelegate.hDuration
             easing.type: Easing.OutCubic
         }
     }

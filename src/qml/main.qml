@@ -234,7 +234,7 @@ Window {
     property real centerHoverProgress: (menuContainer.hoveredIndex === -1) ? 1.0 : 0.0
     Behavior on centerHoverProgress {
         NumberAnimation {
-            duration: 110
+            duration: (root.s && root.s.hoverDuration !== undefined) ? root.s.hoverDuration : 110
             easing.type: Easing.OutCubic
         }
     }

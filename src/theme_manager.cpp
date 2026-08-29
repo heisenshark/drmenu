@@ -858,6 +858,18 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
             style["specularStrengthHover"]   = val;
             style["specular_strength_hover"] = val;
         }
+        if (key == "hover_duration" || key == "hoverDuration" || key == "transition_duration" || key == "transitionDuration" || key == "animation_duration" || key == "animationDuration") {
+            style["hoverDuration"]        = val;
+            style["hover_duration"]       = val;
+            style["transitionDuration"]   = val;
+            style["transition_duration"]  = val;
+        }
+        if (key == "hover_scale_duration" || key == "hoverScaleDuration" || key == "scale_duration" || key == "scaleDuration") {
+            style["hoverScaleDuration"]   = val;
+            style["hover_scale_duration"] = val;
+            style["scaleDuration"]        = val;
+            style["scale_duration"]       = val;
+        }
     }
 
     return style;

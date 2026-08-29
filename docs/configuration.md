@@ -32,12 +32,14 @@ These parameters control the GPU shader when `hypr-liquid-glass` is loaded in Hy
 
 ---
 
-## ⚡ Dynamic Hover Optics (Interpolated)
+## ⚡ Dynamic Hover Optics & Transitions (Interpolated)
 
-When hovering over a pill, optics smoothly animate from base values to hover values (`Easing.OutCubic`):
+When hovering over a pill, optics and geometry smoothly animate from base values to hover values (`Easing.OutCubic`):
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `hoverDuration` / `hover_duration` | `number` | `110` | Transition duration in milliseconds from idle state to hover state |
+| `hoverScaleDuration` / `hover_scale_duration` | `number` | `90` | Scale spring animation duration in milliseconds (`Easing.OutBack`) |
 | `blurHover` / `blur_hover` | `number` | `blur` | Blur radius on the hovered pill |
 | `refractionHover` / `refraction_hover` | `number` | `refractionStrength` | Lens magnification on the hovered pill |
 | `chromaticHover` / `chromatic_hover` | `number` | `chromaticAberration` | Prism dispersion on the hovered pill |
