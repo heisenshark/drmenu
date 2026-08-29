@@ -76,16 +76,17 @@ void main() {
 
     vec3 col = vec3(0.0);
 
-    // Noise-free multi-ring concentric Gaussian blur
+    // Hardware-accelerated Mipmapped Gaussian Blur
     float effectiveBlur = max(0.0, u_blur_strength);
     if (effectiveBlur > 0.01) {
-        vec2 rad = effectiveBlur / u_resolution;
+        float lod = clamp(log2(effectiveBlur * 0.18), 0.0, 3.5);
+        vec2 rad = (effectiveBlur * 0.85) / u_resolution;
 
         // Center tap (weight 1.0)
         vec3 accum = vec3(
-            texture(u_tex, clamp(refrUV + chromOffset, 0.001, 0.999)).r,
-            texture(u_tex, clamp(refrUV, 0.001, 0.999)).g,
-            texture(u_tex, clamp(refrUV - chromOffset, 0.001, 0.999)).b
+            textureLod(u_tex, clamp(refrUV + chromOffset, 0.001, 0.999), lod).r,
+            textureLod(u_tex, clamp(refrUV, 0.001, 0.999), lod).g,
+            textureLod(u_tex, clamp(refrUV - chromOffset, 0.001, 0.999), lod).b
         );
         float totalWeight = 1.0;
 
@@ -95,9 +96,9 @@ void main() {
             float a = float(i) * 1.047197551; // 2pi / 6
             vec2 offset = vec2(cos(a), sin(a)) * (0.22 * rad);
             float w = 0.88;
-            accum.r += texture(u_tex, clamp(refrUV + chromOffset + offset * 1.02, 0.001, 0.999)).r * w;
-            accum.g += texture(u_tex, clamp(refrUV + offset, 0.001, 0.999)).g * w;
-            accum.b += texture(u_tex, clamp(refrUV - chromOffset + offset * 0.98, 0.001, 0.999)).b * w;
+            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset + offset * 1.02, 0.001, 0.999), lod).r * w;
+            accum.g += textureLod(u_tex, clamp(refrUV + offset, 0.001, 0.999), lod).g * w;
+            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset + offset * 0.98, 0.001, 0.999), lod).b * w;
             totalWeight += w;
         }
 
@@ -107,9 +108,9 @@ void main() {
             float a = float(i) * 0.628318531 + 0.314159265; // 2pi / 10 + offset
             vec2 offset = vec2(cos(a), sin(a)) * (0.45 * rad);
             float w = 0.65;
-            accum.r += texture(u_tex, clamp(refrUV + chromOffset + offset * 1.03, 0.001, 0.999)).r * w;
-            accum.g += texture(u_tex, clamp(refrUV + offset, 0.001, 0.999)).g * w;
-            accum.b += texture(u_tex, clamp(refrUV - chromOffset + offset * 0.97, 0.001, 0.999)).b * w;
+            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset + offset * 1.03, 0.001, 0.999), lod).r * w;
+            accum.g += textureLod(u_tex, clamp(refrUV + offset, 0.001, 0.999), lod).g * w;
+            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset + offset * 0.97, 0.001, 0.999), lod).b * w;
             totalWeight += w;
         }
 
@@ -119,9 +120,9 @@ void main() {
             float a = float(i) * 0.448798951 + 0.157079633; // 2pi / 14 + offset
             vec2 offset = vec2(cos(a), sin(a)) * (0.72 * rad);
             float w = 0.40;
-            accum.r += texture(u_tex, clamp(refrUV + chromOffset + offset * 1.04, 0.001, 0.999)).r * w;
-            accum.g += texture(u_tex, clamp(refrUV + offset, 0.001, 0.999)).g * w;
-            accum.b += texture(u_tex, clamp(refrUV - chromOffset + offset * 0.96, 0.001, 0.999)).b * w;
+            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset + offset * 1.04, 0.001, 0.999), lod).r * w;
+            accum.g += textureLod(u_tex, clamp(refrUV + offset, 0.001, 0.999), lod).g * w;
+            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset + offset * 0.96, 0.001, 0.999), lod).b * w;
             totalWeight += w;
         }
 
@@ -131,9 +132,9 @@ void main() {
             float a = float(i) * 0.349065850 + 0.471238898; // 2pi / 18 + offset
             vec2 offset = vec2(cos(a), sin(a)) * (1.00 * rad);
             float w = 0.20;
-            accum.r += texture(u_tex, clamp(refrUV + chromOffset + offset * 1.05, 0.001, 0.999)).r * w;
-            accum.g += texture(u_tex, clamp(refrUV + offset, 0.001, 0.999)).g * w;
-            accum.b += texture(u_tex, clamp(refrUV - chromOffset + offset * 0.95, 0.001, 0.999)).b * w;
+            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset + offset * 1.05, 0.001, 0.999), lod).r * w;
+            accum.g += textureLod(u_tex, clamp(refrUV + offset, 0.001, 0.999), lod).g * w;
+            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset + offset * 0.95, 0.001, 0.999), lod).b * w;
             totalWeight += w;
         }
 

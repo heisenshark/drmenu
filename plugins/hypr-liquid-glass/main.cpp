@@ -199,6 +199,16 @@ static void sampleCleanBackground(PHLMONITOR pMonArg) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, sourceFboId);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, sampleFboId);
     glBlitFramebuffer(0, 0, monW, monH, 0, 0, monW, monH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    auto tex = g_pUnderlayFB->getTexture();
+    if (tex) {
+        glBindTexture(GL_TEXTURE_2D, tex->m_texID);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
 }
 
 static void blitTempFB(PHLMONITOR pMon, SP<Render::IFramebuffer> tempFB) {
