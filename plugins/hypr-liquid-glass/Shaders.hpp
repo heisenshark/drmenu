@@ -144,32 +144,38 @@ void main() {
         col.b = texture(u_tex, clamp(refrUV - chromOffset, 0.001, 0.999)).b;
     }
 
-    // Vibrancy boost
+    // ── Apple Liquid Glass Optical Filter Pipeline ─────────────────────────
+    // 1. Vibrancy & Saturation Boost (Apple CAFilterColorSaturate)
     float gray = dot(col, vec3(0.299, 0.587, 0.114));
-    col = mix(vec3(gray), col, 1.12);
+    col = mix(vec3(gray), col, 1.22);
 
-    // Milky frosted glass tint
+    // 2. Inner Edge Ambient Occlusion (internal refractive depth)
+    float innerEdgeShadow = smoothstep(0.0, 1.0, edgeFactor);
+    col *= mix(0.92, 1.0, innerEdgeShadow);
+
+    // 3. Substrate Material Tint (Frosted milk / acrylic pigment)
     if (u_milky_tint.a > 0.0) {
         col = mix(col, u_milky_tint.rgb, u_milky_tint.a);
     }
 
-    // Specular Fresnel gloss sheen
+    // 4. Fresnel Surface Specular Sheen (Air-glass reflection + top rim highlight)
     if (u_specular_strength > 0.001) {
         vec2 lightDir = normalize(vec2(-0.35, -0.93));
         float nDotL = max(0.0, dot(normal, -lightDir));
         float topBias = pow(clamp(-p.y / halfSize.y, 0.0, 1.0), 1.5);
         float fresnel = pow(1.0 - edgeFactor, 2.0);
-        float specHighlight = (topBias * 0.7 + nDotL * fresnel * 0.8) * u_specular_strength;
+        float specHighlight = (topBias * 0.70 + nDotL * fresnel * 0.80) * u_specular_strength;
         col += vec3(1.0, 0.98, 0.95) * specHighlight;
     }
 
-    // Liquid glass rim border
+    // 5. Specular Rim / Bevel Border
     if (u_border_width > 0.0 && u_border_color.a > 0.0) {
         float borderDist = abs(dist + u_border_width * 0.5) - u_border_width * 0.5;
         float borderFactor = 1.0 - smoothstep(0.0, 1.2, borderDist);
         col = mix(col, u_border_color.rgb, borderFactor * u_border_color.a);
     }
 
+    // 6. Anti-Aliased Outer Boundary Cutout
     fragColor = vec4(col, edgeAlpha);
 }
 )#";
