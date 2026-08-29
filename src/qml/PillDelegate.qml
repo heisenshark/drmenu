@@ -59,6 +59,17 @@ Item {
     }
     scale: isHovered ? 1.09 : 1.0
 
+    property real hoverProgress: isHovered ? 1.0 : 0.0
+    Behavior on hoverProgress {
+        NumberAnimation {
+            duration: 110
+            easing.type: Easing.OutCubic
+        }
+    }
+    onHoverProgressChanged: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
+
     // ── Main Glass Body ────────────────────────────────────────────────
     Rectangle {
         id: pillBody

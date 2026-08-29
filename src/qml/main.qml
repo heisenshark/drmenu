@@ -231,6 +231,15 @@ Window {
         }
     }
 
+    property real centerHoverProgress: (menuContainer.hoveredIndex === -1) ? 1.0 : 0.0
+    Behavior on centerHoverProgress {
+        NumberAnimation {
+            duration: 110
+            easing.type: Easing.OutCubic
+        }
+    }
+    onCenterHoverProgressChanged: root.updateGlassOptics()
+
     function updateGlassOptics() {
         if (typeof output === "undefined") return
         let enableGlass = root.s && (root.s.glass === true || root.s.useGlass === true)
@@ -293,21 +302,26 @@ Window {
                 let pItem = pillRepeater.itemAt(i)
                 if (pItem && pItem.width > 0 && pItem.height > 0) {
                     let s = (typeof pItem.scale === "number") ? pItem.scale : 1.0
+                    let hProg = (typeof pItem.hoverProgress === "number") ? pItem.hoverProgress : ((menuContainer.hoveredIndex === i) ? 1.0 : 0.0)
                     let pw = pItem.width * s
                     let ph = pItem.height * s
                     let px = pItem.x + pItem.width / 2.0
                     let py = pItem.y + pItem.height / 2.0
-                    let isHov = (menuContainer.hoveredIndex === i)
+                    
                     let itemObj = menuModel.get(i)
                     let isSub = itemObj && itemObj.submenuName && itemObj.submenuName !== ""
                     let useSubAccent = isSub && (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
 
-                    let pCol = isHov
-                        ? (useSubAccent && root.s.pillSubmenuHoverColor ? root.s.pillSubmenuHoverColor : (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff"))
-                        : (useSubAccent && root.s.pillSubmenuColor ? root.s.pillSubmenuColor : (root.s.pillColor || root.s.pill_color || "#20ffffff"))
-                    let bCol = isHov
-                        ? (useSubAccent && root.s.pillSubmenuBorderHover ? root.s.pillSubmenuBorderHover : (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff"))
-                        : (useSubAccent && root.s.pillSubmenuBorder ? root.s.pillSubmenuBorder : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff"))
+                    let basePCol = (useSubAccent && root.s.pillSubmenuColor) ? root.s.pillSubmenuColor : (root.s.pillColor || root.s.pill_color || "#20ffffff")
+                    let hovPCol  = (useSubAccent && root.s.pillSubmenuHoverColor) ? root.s.pillSubmenuHoverColor : (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff")
+                    let baseBCol = (useSubAccent && root.s.pillSubmenuBorder) ? root.s.pillSubmenuBorder : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff")
+                    let hovBCol  = (useSubAccent && root.s.pillSubmenuBorderHover) ? root.s.pillSubmenuBorderHover : (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff")
+
+                    let pCol = (hProg >= 0.5) ? hovPCol : basePCol
+                    let bCol = (hProg >= 0.5) ? hovBCol : baseBCol
+                    let baseBW = (root.s.borderWidth || root.s.border_width || 1.0)
+                    let hovBW  = (root.s.borderHoverWidth || root.s.border_hover_width || 2.0)
+                    let bw = baseBW + (hovBW - baseBW) * hProg
 
                     pills.push({
                         x: px,
@@ -315,13 +329,13 @@ Window {
                         halfWidth: pw / 2.0,
                         halfHeight: ph / 2.0,
                         radius: pRad * s,
-                        blur: isHov ? blurHover : blurRad,
-                        refraction: isHov ? refrHover : refr,
-                        chromatic: isHov ? chromHover : chrom,
-                        specular: isHov ? specHover : spec,
+                        blur: blurRad + (blurHover - blurRad) * hProg,
+                        refraction: refr + (refrHover - refr) * hProg,
+                        chromatic: chrom + (chromHover - chrom) * hProg,
+                        specular: spec + (specHover - spec) * hProg,
                         pillColor: pCol,
                         borderColor: bCol,
-                        borderWidth: isHov ? (root.s.borderHoverWidth || root.s.border_hover_width || 2.0) : (root.s.borderWidth || root.s.border_width || 1.0)
+                        borderWidth: bw
                     })
                 }
             }
@@ -333,6 +347,7 @@ Window {
             for (let i = 0; i < count; ++i) {
                 let angle = root.getItemAngleRad(i, count)
                 let isHov = (menuContainer.hoveredIndex === i)
+                let hProg = isHov ? 1.0 : 0.0
                 let s = isHov ? 1.09 : 1.0
                 let px = cx + Math.cos(angle) * rDist
                 let py = cy + Math.sin(angle) * rDist
@@ -348,12 +363,16 @@ Window {
                 let totalW = Math.max(70.0, iconW + badgeW + textW + 28.0) * s
                 let totalH = (root.s.pillHeight || 42) * s
 
-                let pCol = isHov
-                    ? (useSubAccent && root.s.pillSubmenuHoverColor ? root.s.pillSubmenuHoverColor : (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff"))
-                    : (useSubAccent && root.s.pillSubmenuColor ? root.s.pillSubmenuColor : (root.s.pillColor || root.s.pill_color || "#20ffffff"))
-                let bCol = isHov
-                    ? (useSubAccent && root.s.pillSubmenuBorderHover ? root.s.pillSubmenuBorderHover : (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff"))
-                    : (useSubAccent && root.s.pillSubmenuBorder ? root.s.pillSubmenuBorder : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff"))
+                let basePCol = (useSubAccent && root.s.pillSubmenuColor) ? root.s.pillSubmenuColor : (root.s.pillColor || root.s.pill_color || "#20ffffff")
+                let hovPCol  = (useSubAccent && root.s.pillSubmenuHoverColor) ? root.s.pillSubmenuHoverColor : (root.s.pillHoverColor || root.s.pill_hover_color || "#40ffffff")
+                let baseBCol = (useSubAccent && root.s.pillSubmenuBorder) ? root.s.pillSubmenuBorder : (root.s.borderColor || root.s.border_color || root.s.pillBorderColor || "#60ffffff")
+                let hovBCol  = (useSubAccent && root.s.pillSubmenuBorderHover) ? root.s.pillSubmenuBorderHover : (root.s.borderHoverColor || root.s.border_hover_color || root.s.pillBorderHoverColor || "#d0ffffff")
+
+                let pCol = (hProg >= 0.5) ? hovPCol : basePCol
+                let bCol = (hProg >= 0.5) ? hovBCol : baseBCol
+                let baseBW = (root.s.borderWidth || root.s.border_width || 1.0)
+                let hovBW  = (root.s.borderHoverWidth || root.s.border_hover_width || 2.0)
+                let bw = baseBW + (hovBW - baseBW) * hProg
 
                 pills.push({
                     x: px,
@@ -361,34 +380,40 @@ Window {
                     halfWidth: totalW / 2.0,
                     halfHeight: totalH / 2.0,
                     radius: pRad * s,
-                    blur: isHov ? blurHover : blurRad,
-                    refraction: isHov ? refrHover : refr,
-                    chromatic: isHov ? chromHover : chrom,
-                    specular: isHov ? specHover : spec,
+                    blur: blurRad + (blurHover - blurRad) * hProg,
+                    refraction: refr + (refrHover - refr) * hProg,
+                    chromatic: chrom + (chromHover - chrom) * hProg,
+                    specular: spec + (specHover - spec) * hProg,
                     pillColor: pCol,
                     borderColor: bCol,
-                    borderWidth: isHov ? (root.s.borderHoverWidth || root.s.border_hover_width || 2.0) : (root.s.borderWidth || root.s.border_width || 1.0)
+                    borderWidth: bw
                 })
             }
         }
 
         let centerRad = (root.s.centerRadius !== undefined) ? root.s.centerRadius : (root.s.torusRadius !== undefined ? root.s.torusRadius : 20.0)
-        let isCenterHov = (menuContainer.hoveredIndex === -1)
+        let cHProg = root.centerHoverProgress
+        let cBlur = blurRad + (blurHover - blurRad) * cHProg
+        let cRefr = refr + (refrHover - refr) * cHProg
+        let cChrom = chrom + (chromHover - chrom) * cHProg
+        let cSpec = spec + (specHover - spec) * cHProg
+        let cBW = 1.0 + (1.5 - 1.0) * cHProg
+
         pills.push({
             x: cx,
             y: cy,
             halfWidth: centerRad,
             halfHeight: centerRad,
             radius: centerRad,
-            blur: isCenterHov ? blurHover : blurRad,
-            refraction: isCenterHov ? refrHover : refr,
-            chromatic: isCenterHov ? chromHover : chrom,
-            specular: isCenterHov ? specHover : spec,
+            blur: cBlur,
+            refraction: cRefr,
+            chromatic: cChrom,
+            specular: cSpec,
             pillColor: (root.s.centerColor !== undefined) ? root.s.centerColor : "transparent",
-            borderColor: (menuContainer.hoveredIndex !== -1)
+            borderColor: (cHProg < 0.5 && menuContainer.hoveredIndex !== -1)
                 ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || "transparent")
                 : (root.hasParent ? (root.s.submenuAccent || "#80bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || "#40ffffff")),
-            borderWidth: (root.s.centerBorderWidth !== undefined) ? root.s.centerBorderWidth : 1.0
+            borderWidth: cBW
         })
 
         output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr, spec)
