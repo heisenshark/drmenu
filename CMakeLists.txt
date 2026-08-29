@@ -12,7 +12,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Find required Qt6 packages
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickShapes Network)
 find_package(LayerShellQt REQUIRED)
 
 # Modern Qt6 configuration helper
@@ -58,6 +58,7 @@ target_link_libraries(drmenu PRIVATE
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
+    Qt6::QuickShapes
     Qt6::Network
     LayerShellQt::Interface
 )

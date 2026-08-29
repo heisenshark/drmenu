@@ -167,6 +167,8 @@ ParsedArgs CliParser::parse(int argc, char *argv[]) {
             args.daemonMode = true;
         } else if (a == "--media") {
             args.mediaMode = true;
+        } else if (a == "--ping" || a == "-p" || a == "--test-glass") {
+            args.pingMode = true;
         } else if ((a == "--menu" || a == "-m") && i + 1 < argc) {
             args.menuName = QString(argv[++i]);
         } else if ((a == "--config" || a == "-c") && i + 1 < argc) {
@@ -181,7 +183,7 @@ ParsedArgs CliParser::parse(int argc, char *argv[]) {
     } else if (!positional.isEmpty()) {
         for (const QString &a : positional)
             args.items.append(parseEntry(a));
-    } else if (!args.daemonMode && args.menuName.isEmpty()) {
+    } else if (!args.daemonMode && !args.pingMode && args.menuName.isEmpty()) {
         // stdin items (dmenu style) only if not daemon mode and no --menu flag
         QTextStream in(stdin);
         while (!in.atEnd()) {

@@ -3,12 +3,26 @@
 #include "daemon.h"
 #include "client.h"
 #include "standalone_app.h"
+#include "hypr_shader.h"
 
 #include <QTextStream>
 #include <QProcess>
 
 int main(int argc, char *argv[]) {
     ParsedArgs args = CliParser::parse(argc, argv);
+
+    if (args.pingMode) {
+        QTextStream out(stdout);
+        out << "========================================\n";
+        out << "  drmenu <-> hypr-liquid-glass IPC Ping  \n";
+        out << "========================================\n";
+        QString response = HyprlandGlassShader::ping();
+        out << "Response from Hyprland Socket:\n";
+        out << "  " << response << "\n";
+        out << "========================================\n";
+        out.flush();
+        return response.startsWith("ERROR") ? 1 : 0;
+    }
 
     if (args.daemonMode)
         return DaemonServer::run(argc, argv);

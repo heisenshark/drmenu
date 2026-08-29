@@ -4,6 +4,7 @@
 #include "output_controller.h"
 #include "theme_icon_provider.h"
 #include "screen_grabber.h"
+#include "hypr_shader.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -31,10 +32,17 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
     auto t_start = std::chrono::high_resolution_clock::now();
 
     if (!qgetenv("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
+        bool enableLayerBlur = false;
+        QVariantMap s = output.style();
+        if (s.contains("layerBlur") || s.contains("layer_blur")) {
+            enableLayerBlur = s.value("layerBlur", s.value("layer_blur")).toBool();
+        }
+        QString blurStr = enableLayerBlur ? "true" : "false";
+        QString cmd = QString("hl.layer_rule({ match = { namespace = 'drmenu' }, blur = %1, ignore_alpha = 0.15, no_anim = true })").arg(blurStr);
         QProcess proc;
         proc.setStandardOutputFile(QProcess::nullDevice());
         proc.setStandardErrorFile(QProcess::nullDevice());
-        proc.start("hyprctl", {"eval", "hl.layer_rule({ match = { namespace = 'drmenu' }, blur = true, ignore_alpha = 0.15, no_anim = true })"});
+        proc.start("hyprctl", {"eval", cmd});
         proc.waitForFinished(80);
     }
 
@@ -42,6 +50,14 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+
+    static auto signalHandler = [](int sig) {
+        HyprlandGlassShader::deactivate();
+        std::_Exit(128 + sig);
+    };
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
+    std::signal(SIGHUP, signalHandler);
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("drmenu");
@@ -51,6 +67,23 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
         : TargetScreenInfo{};
 
     QQmlApplicationEngine engine;
+    engine.addImportPath("/run/current-system/sw/lib/qt-6/qml");
+    engine.addImportPath(QDir::homePath() + "/.nix-profile/lib/qt-6/qml");
+    engine.addImportPath(QDir::homePath() + "/.local/state/nix/profile/lib/qt-6/qml");
+    engine.addImportPath("/etc/profiles/per-user/" + qgetenv("USER") + "/lib/qt-6/qml");
+    const char* nixQml = getenv("NIXPKGS_QML_SEARCH_PATHS");
+    if (nixQml && nixQml[0]) {
+        for (const QString &p : QString(nixQml).split(':', Qt::SkipEmptyParts)) {
+            engine.addImportPath(p);
+        }
+    }
+    const char* envQml = getenv("QML2_IMPORT_PATH");
+    if (envQml && envQml[0]) {
+        for (const QString &p : QString(envQml).split(':', Qt::SkipEmptyParts)) {
+            engine.addImportPath(p);
+        }
+    }
+
     ScreenGrabber screenGrabber;
     engine.rootContext()->setContextProperty("output", &output);
     engine.rootContext()->setContextProperty("screenGrabber", &screenGrabber);
@@ -102,6 +135,11 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
     engine.addImageProvider(QStringLiteral("icon"), new ThemeIconProvider);
     engine.addImageProvider(QStringLiteral("screengrab"), new ScreenGrabProvider(&screenGrabber));
     engine.load(url);
+
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, []() {
+        HyprlandGlassShader::deactivate();
+    });
+
     return app.exec();
 }
 
@@ -132,6 +170,7 @@ int StandaloneApp::run(int argc, char *argv[], const QVariantMap &allMenus,
     QMap<QString, QString> cmdMap = buildCommandMap(allMenus);
 
     output.onSelectCallback = [cmdMap](const QString &label) {
+        HyprlandGlassShader::deactivate();
         QTextStream out(stdout);
         out << label << Qt::endl;
         auto it = cmdMap.find(label);
@@ -139,7 +178,10 @@ int StandaloneApp::run(int argc, char *argv[], const QVariantMap &allMenus,
             QProcess::startDetached("sh", {"-c", it.value()});
         QCoreApplication::exit(0);
     };
-    output.onCancelCallback = []() { QCoreApplication::exit(1); };
+    output.onCancelCallback = []() {
+        HyprlandGlassShader::deactivate();
+        QCoreApplication::exit(1);
+    };
     output.setMenuData(allMenus, initialMenu, spawnAtMouse, escapeClosesAll, style);
     return runInternal(argc, argv, output, spawnAtMouse);
 }
@@ -149,6 +191,7 @@ int StandaloneApp::runItems(int argc, char *argv[], const QList<MenuItem> &items
                             const QVariantMap &style) {
     OutputController output;
     output.onSelectCallback = [items](const QString &label) {
+        HyprlandGlassShader::deactivate();
         QTextStream out(stdout);
         out << label << Qt::endl;
         for (const MenuItem &item : items) {
@@ -159,7 +202,10 @@ int StandaloneApp::runItems(int argc, char *argv[], const QList<MenuItem> &items
         }
         QCoreApplication::exit(0);
     };
-    output.onCancelCallback = []() { QCoreApplication::exit(1); };
+    output.onCancelCallback = []() {
+        HyprlandGlassShader::deactivate();
+        QCoreApplication::exit(1);
+    };
     output.setItems(CliParser::buildModel(items), style);
     return runInternal(argc, argv, output, true);
 }

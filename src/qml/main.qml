@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 
 Window {
     id: root
@@ -13,6 +12,9 @@ Window {
 
     property real menuX: width  / 2
     property real menuY: height / 2
+
+    onMenuXChanged: root.updateGlassOptics()
+    onMenuYChanged: root.updateGlassOptics()
 
     // ── Style helper accessor ──────────────────────────────────────────────────
     readonly property var  s: output.style || {}
@@ -198,6 +200,7 @@ Window {
             menuStack = [output.initialMenu]
             hasParent = false
             loadItems(items)
+            root.updateGlassOptics()
             root.triggerScreenCapture()
         }
 
@@ -217,6 +220,7 @@ Window {
             }
 
             loadItems(output.items)
+            root.updateGlassOptics()
             root.triggerScreenCapture()
             menuContainer.opacity = 1.0
             openAnimation.start()
@@ -225,16 +229,25 @@ Window {
 
     function updateGlassOptics() {
         if (typeof output === "undefined") return
+        let enableGlass = root.s && (root.s.glass === true || root.s.useGlass === true || root.s.useScreencopyGlass === true || (typeof root.s.theme === "string" && root.s.theme.indexOf("glass") >= 0))
+        if (!enableGlass) {
+            output.deactivateGlassShader()
+            return
+        }
+
         let chrom = (root.s.chromaticAberration !== undefined) ? root.s.chromaticAberration
-                  : ((root.s.chromatic_aberration !== undefined) ? root.s.chromatic_aberration : 1.6)
-        let blurRad = (root.s.blurStrength !== undefined) ? root.s.blurStrength
+                  : ((root.s.chromatic_aberration !== undefined) ? root.s.chromatic_aberration
+                  : ((root.s.chromatic !== undefined) ? root.s.chromatic : 1.4))
+        let blurRad = (root.s.blur !== undefined) ? root.s.blur
+                    : ((root.s.blurStrength !== undefined) ? root.s.blurStrength
                     : ((root.s.blur_strength !== undefined) ? root.s.blur_strength
                     : ((root.s.blurRadius !== undefined) ? root.s.blurRadius
                     : ((root.s.blur_radius !== undefined) ? root.s.blur_radius
-                    : ((root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 28.0))))
-        let vib = (root.s.vibrancy !== undefined) ? root.s.vibrancy : 1.35
+                    : ((root.s.screencopyBlurRadius !== undefined) ? root.s.screencopyBlurRadius : 24.0)))))
+        let vib = (root.s.vibrancy !== undefined) ? root.s.vibrancy : 1.15
         let refr = (root.s.refractionStrength !== undefined) ? root.s.refractionStrength
-                 : ((root.s.refraction_strength !== undefined) ? root.s.refraction_strength : 0.85)
+                 : ((root.s.refraction_strength !== undefined) ? root.s.refraction_strength
+                 : ((root.s.refraction !== undefined) ? root.s.refraction : 0.85))
 
         let count = menuModel.count
         if (count <= 0) return
@@ -243,23 +256,51 @@ Window {
         let cx = menuContainer.centerX
         let cy = menuContainer.centerY
         let rDist = root.s.radiusDistance || 185
-        let pHalfH = (root.s.pillHeight || 46) / 2
+        let pHalfH = (root.s.pillHeight || 42) / 2
         let pRad = root.s.pillRadius !== undefined ? root.s.pillRadius : pHalfH
 
-        for (let i = 0; i < count; ++i) {
-            let angle = root.getItemAngleRad(i, count)
-            let px = cx + Math.cos(angle) * rDist
-            let py = cy + Math.sin(angle) * rDist
-            let itemObj = menuModel.get(i)
-            let labelText = (itemObj && itemObj.label) ? itemObj.label : ""
-            let pHalfW = Math.max(50.0, (labelText.length * 8.5 + 46.0) / 2.0)
-            pills.push({
-                x: px,
-                y: py,
-                halfWidth: pHalfW,
-                halfHeight: pHalfH,
-                radius: pRad
-            })
+        let hasLiveItems = (typeof pillRepeater !== "undefined" && pillRepeater && pillRepeater.count === count)
+        if (hasLiveItems) {
+            for (let i = 0; i < count; ++i) {
+                let pItem = pillRepeater.itemAt(i)
+                if (pItem && pItem.width > 0 && pItem.height > 0) {
+                    let pw = pItem.width
+                    let ph = pItem.height
+                    let px = pItem.x + pw / 2.0
+                    let py = pItem.y + ph / 2.0
+                    pills.push({
+                        x: px,
+                        y: py,
+                        halfWidth: pw / 2.0,
+                        halfHeight: ph / 2.0,
+                        radius: pRad
+                    })
+                }
+            }
+        }
+
+        // Fallback with precise component-based sizing if items not yet laid out
+        if (pills.length < count) {
+            pills = []
+            for (let i = 0; i < count; ++i) {
+                let angle = root.getItemAngleRad(i, count)
+                let px = cx + Math.cos(angle) * rDist
+                let py = cy + Math.sin(angle) * rDist
+                let itemObj = menuModel.get(i)
+                let labelText = (itemObj && itemObj.label) ? itemObj.label : ""
+                let hasIcon = (itemObj && ((itemObj.iconName && itemObj.iconName !== "") || (itemObj.icon && itemObj.icon !== "")))
+                let iconW = hasIcon ? ((root.s.iconSize || 22) + 7) : 0
+                let badgeW = (root.s.showNumberBadges !== false) ? 18 : 0
+                let textW = labelText.length * 8.5
+                let totalW = Math.max(70.0, iconW + badgeW + textW + 28.0)
+                pills.push({
+                    x: px,
+                    y: py,
+                    halfWidth: totalW / 2.0,
+                    halfHeight: pHalfH,
+                    radius: pRad
+                })
+            }
         }
 
         pills.push({
@@ -274,7 +315,7 @@ Window {
     }
 
     function triggerScreenCapture() {
-        if (typeof screenGrabber !== "undefined" && root.s && (root.s.useScreencopyGlass === true || root.s.useGlass === true || root.s.glass === true)) {
+        if (typeof screenGrabber !== "undefined" && root.s && (root.s.useScreencopyGlass === true)) {
             let pad = Math.round(menuContainer.margin)
             let cx = Math.round(menuContainer.centerX)
             let cy = Math.round(menuContainer.centerY)
@@ -325,6 +366,12 @@ Window {
         }
     }
 
+    Component.onDestruction: {
+        if (typeof output !== "undefined") {
+            output.deactivateGlassShader()
+        }
+    }
+
     // ── Keyboard Shortcuts ─────────────────────────────────────────────────────
     Shortcut { sequence: "Escape"; onActivated: root.handleEscape() }
 
@@ -335,7 +382,14 @@ Window {
         NumberAnimation { target: menuContainer; property: "opacity"; from: 0.0;  to: 1.0; duration: 25 }
     }
 
-    ListModel { id: menuModel }
+    ListModel {
+        id: menuModel
+        onCountChanged: {
+            if (count > 0) {
+                root.updateGlassOptics()
+            }
+        }
+    }
 
     Item {
         id: menuContainer
@@ -397,6 +451,8 @@ Window {
         property real margin:  radiusDistance + 110
         property real centerX: Math.max(margin, Math.min(width  - margin, root.menuX))
         property real centerY: Math.max(margin, Math.min(height - margin, root.menuY))
+        onCenterXChanged: root.updateGlassOptics()
+        onCenterYChanged: root.updateGlassOptics()
         property int  itemCount:            menuModel.count
         property int  hoveredIndex:         -1
         property real currentMouseAngleDeg: 0
@@ -405,7 +461,11 @@ Window {
         Rectangle {
             anchors.fill: parent
             color: root.s.backgroundColor || "#000000"
-            opacity: root.s.backgroundOpacity !== undefined ? root.s.backgroundOpacity : 0.38
+            opacity: {
+                if (root.s.backgroundOpacity !== undefined) return root.s.backgroundOpacity
+                if (root.s.glass === true || root.s.useGlass === true) return 0.20
+                return 0.38
+            }
         }
 
         // ── Mouse tracking (Left click to select, Right click to close/back) ────
@@ -463,34 +523,22 @@ Window {
         }
 
         // ── Directional pointer line (Pill mode only) ──────────────────────────
-        Shape {
-            anchors.fill: parent
+        Item {
+            x: menuContainer.centerX
+            y: menuContainer.centerY
             visible: !root.isPieMode && (root.s.showPointerLine !== false) && menuContainer.hoveredIndex !== -1
-            layer.enabled: true
-            layer.samples:  4
+            rotation: menuContainer.hoveredIndex !== -1 ? root.getItemAngleRad(menuContainer.hoveredIndex, menuContainer.itemCount) * 180 / Math.PI : 0
 
-            ShapePath {
-                strokeWidth: 2
-                strokeColor: {
+            Rectangle {
+                x: 0
+                y: -1
+                height: 2
+                width: Math.max(0, menuContainer.radiusDistance - 22)
+                color: {
                     if (menuContainer.hoveredIndex === -1) return "transparent"
                     let item = menuModel.get(menuContainer.hoveredIndex)
                     if (item && item.submenuName !== "") return root.s.submenuAccent || "#c084fc"
                     return root.s.accentColor || "#e67e22"
-                }
-                fillColor:   "transparent"
-
-                PathMove { x: menuContainer.centerX; y: menuContainer.centerY }
-                PathLine {
-                    x: {
-                        if (menuContainer.hoveredIndex === -1) return menuContainer.centerX
-                        let a = root.getItemAngleRad(menuContainer.hoveredIndex, menuContainer.itemCount)
-                        return menuContainer.centerX + (menuContainer.radiusDistance - 22) * Math.cos(a)
-                    }
-                    y: {
-                        if (menuContainer.hoveredIndex === -1) return menuContainer.centerY
-                        let a = root.getItemAngleRad(menuContainer.hoveredIndex, menuContainer.itemCount)
-                        return menuContainer.centerY + (menuContainer.radiusDistance - 22) * Math.sin(a)
-                    }
                 }
             }
         }
@@ -532,6 +580,7 @@ Window {
 
         // ── MODE 2: Floating Pill / Polygon Delegates ──────────────────────────
         Repeater {
+            id: pillRepeater
             model: menuModel
             delegate: PillDelegate {}
         }

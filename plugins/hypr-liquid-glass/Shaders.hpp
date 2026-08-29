@@ -8,15 +8,14 @@ inline const std::string LIQUID_GLASS_VERT = R"#(
 #version 300 es
 precision highp float;
 layout (location = 0) in vec2 a_pos;
-layout (location = 1) in vec2 a_texcoord;
 
+uniform mat3 u_proj;
 out vec2 v_texcoord;
-out vec2 v_screen_uv;
 
 void main() {
-    v_texcoord = a_texcoord;
-    v_screen_uv = vec2(a_pos.x * 0.5 + 0.5, a_pos.y * 0.5 + 0.5);
-    gl_Position = vec4(a_pos, 0.0, 1.0);
+    vec3 pos = u_proj * vec3(a_pos, 1.0);
+    gl_Position = vec4(pos.xy, 0.0, 1.0);
+    v_texcoord = a_pos;
 }
 )#";
 
@@ -25,12 +24,11 @@ inline const std::string LIQUID_GLASS_FRAG = R"#(
 precision highp float;
 
 in vec2 v_texcoord;
-in vec2 v_screen_uv;
 out vec4 fragColor;
 
 uniform sampler2D u_tex;
 uniform vec2 u_resolution;
-uniform vec4 u_pill_rect; // x, y, w, h in screen pixels (y is top-down)
+uniform vec4 u_pill_rect; // x, y, w, h in screen pixels
 uniform float u_corner_radius;
 uniform float u_blur_strength;
 uniform float u_refraction_strength;
@@ -59,56 +57,64 @@ void main() {
         discard;
     }
 
+    // Exact hardware screen pixel from rasterizer
+    vec2 screenUV = gl_FragCoord.xy / u_resolution;
+
     // Normal gradient for convex refraction & chromatic dispersion
     float edgeDist = -dist;
     float edgeFactor = clamp(edgeDist / max(1.0, u_corner_radius), 0.0, 1.0);
-    vec2 normal = normalize(p / max(vec2(1.0), halfSize - u_corner_radius));
+    vec2 normP = p / max(vec2(1.0), halfSize - u_corner_radius);
+    float normLen = length(normP);
+    vec2 normal = normLen > 0.001 ? normP / normLen : vec2(0.0);
 
-    // Refraction vector (bends texture coordinate near glass boundaries)
-    float refr = (1.0 - edgeFactor) * u_refraction_strength * (10.0 / u_resolution.x);
-    vec2 refrUV = v_screen_uv - normal * refr;
+    // Refraction vector (bends texture coordinate near glass boundaries in screen space)
+    vec2 refr = (1.0 - edgeFactor) * u_refraction_strength * (10.0 / u_resolution);
+    vec2 refrUV = screenUV - normal * refr;
 
     // Chromatic dispersion offsets (separates R and B channels)
-    vec2 chromOffset = normal * (u_chromatic_aberration * 4.0) / u_resolution.x * (1.0 - edgeFactor * 0.5);
+    vec2 chromOffset = normal * (u_chromatic_aberration * 3.0) / u_resolution * (1.0 - edgeFactor * 0.5);
 
     vec3 col = vec3(0.0);
 
-    // Multi-tap Poisson frosted blur with chromatic dispersion
-    if (u_blur_strength > 0.1) {
-        float bStep = (u_blur_strength * 0.40) / u_resolution.x;
+    // Multi-tap Poisson frosted blur driven directly by u_blur_strength
+    float effectiveBlur = max(0.0, u_blur_strength);
+    if (effectiveBlur > 0.01) {
+        vec2 rad = (effectiveBlur * 0.9) / u_resolution;
+        const vec2 taps[24] = vec2[24](
+            vec2(-0.326212, -0.405805), vec2(-0.840144, -0.073580),
+            vec2(-0.695914,  0.457137), vec2(-0.203345,  0.620716),
+            vec2( 0.962340, -0.194983), vec2( 0.473434, -0.480026),
+            vec2( 0.519456,  0.767022), vec2( 0.185461, -0.893124),
+            vec2( 0.507431,  0.064425), vec2( 0.896420,  0.412458),
+            vec2(-0.321940, -0.932615), vec2(-0.791559, -0.597705),
+            vec2(-0.214444,  0.211431), vec2(-0.413941,  0.864928),
+            vec2( 0.034502, -0.320490), vec2( 0.213567,  0.264288),
+            vec2(-0.552123, -0.231241), vec2(-0.412532, -0.712314),
+            vec2(-0.112451, -0.612452), vec2(-0.732145,  0.151241),
+            vec2(-0.452141,  0.412451), vec2( 0.151241,  0.852141),
+            vec2( 0.612451,  0.312451), vec2( 0.781245, -0.451241)
+        );
 
-        // Red channel (shifted)
-        vec2 rUV = refrUV + chromOffset;
-        col.r += texture(u_tex, rUV).r * 0.28;
-        col.r += texture(u_tex, rUV + vec2( bStep * 1.4,  bStep * 0.8)).r * 0.18;
-        col.r += texture(u_tex, rUV + vec2(-bStep * 1.4,  bStep * 0.8)).r * 0.18;
-        col.r += texture(u_tex, rUV + vec2( bStep * 0.8, -bStep * 1.4)).r * 0.18;
-        col.r += texture(u_tex, rUV + vec2(-bStep * 0.8, -bStep * 1.4)).r * 0.18;
-        col.r += texture(u_tex, rUV + vec2(-bStep * 0.8, -bStep * 1.4)).r * 0.18;
-
-        // Green channel (center)
-        col.g += texture(u_tex, refrUV).g * 0.28;
-        col.g += texture(u_tex, refrUV + vec2( bStep * 1.4,  0.0)).g * 0.18;
-        col.g += texture(u_tex, refrUV + vec2(-bStep * 1.4,  0.0)).g * 0.18;
-        col.g += texture(u_tex, refrUV + vec2( 0.0,  bStep * 1.4)).g * 0.18;
-        col.g += texture(u_tex, refrUV + vec2( 0.0, -bStep * 1.4)).g * 0.18;
-
-        // Blue channel (counter-shifted)
-        vec2 bUV = refrUV - chromOffset;
-        col.b += texture(u_tex, bUV).b * 0.28;
-        col.b += texture(u_tex, bUV + vec2( bStep * 1.4,  bStep * 0.8)).b * 0.18;
-        col.b += texture(u_tex, bUV + vec2(-bStep * 1.4,  bStep * 0.8)).b * 0.18;
-        col.b += texture(u_tex, bUV + vec2( bStep * 0.8, -bStep * 1.4)).b * 0.18;
-        col.b += texture(u_tex, bUV + vec2(-bStep * 0.8, -bStep * 1.4)).b * 0.18;
+        vec3 accum = vec3(0.0);
+        for (int i = 0; i < 24; ++i) {
+            vec2 offset = taps[i] * rad;
+            vec2 rUV = clamp(refrUV + chromOffset + offset * 1.05, 0.001, 0.999);
+            vec2 gUV = clamp(refrUV + offset, 0.001, 0.999);
+            vec2 bUV = clamp(refrUV - chromOffset + offset * 0.95, 0.001, 0.999);
+            accum.r += texture(u_tex, rUV).r;
+            accum.g += texture(u_tex, gUV).g;
+            accum.b += texture(u_tex, bUV).b;
+        }
+        col = accum * 0.04166667;
     } else {
-        col.r = texture(u_tex, refrUV + chromOffset).r;
-        col.g = texture(u_tex, refrUV).g;
-        col.b = texture(u_tex, refrUV - chromOffset).b;
+        col.r = texture(u_tex, clamp(refrUV + chromOffset, 0.001, 0.999)).r;
+        col.g = texture(u_tex, clamp(refrUV, 0.001, 0.999)).g;
+        col.b = texture(u_tex, clamp(refrUV - chromOffset, 0.001, 0.999)).b;
     }
 
-    // Vibrancy & saturation boost
+    // Vibrancy boost
     float gray = dot(col, vec3(0.299, 0.587, 0.114));
-    col = mix(vec3(gray), col, 1.25);
+    col = mix(vec3(gray), col, 1.12);
 
     // Milky frosted glass tint
     if (u_milky_tint.a > 0.0) {
@@ -117,7 +123,7 @@ void main() {
 
     // Specular Fresnel gloss sheen on top edge
     float specular = clamp((0.5 - p.y / halfSize.y), 0.0, 1.0) * (1.0 - edgeFactor) * u_specular_strength;
-    col += vec3(specular * 0.35);
+    col += vec3(specular * 0.30);
 
     // Liquid glass rim border
     if (u_border_width > 0.0 && u_border_color.a > 0.0) {

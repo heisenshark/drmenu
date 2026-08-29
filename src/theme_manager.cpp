@@ -585,10 +585,14 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["showGuideRing"]        = false;
         style["showPointerLine"]      = false;
     } else if (name == "liquid-glass" || name == "apple-liquid" || name == "liquid" || name == "liquid-dark") {
-        style["useScreencopyGlass"]   = true;
-        style["screencopyBlurRadius"] = 35;
+        style["glass"]                = true;
+        style["useGlass"]             = true;
+        style["useScreencopyGlass"]   = false;
+        style["blurRadius"]           = 24;
+        style["refractionStrength"]   = 0.85;
+        style["chromaticAberration"]  = 0;
+        style["screencopyBlurRadius"] = 24;
         style["screencopyVibrancy"]   = 1.45;
-        style["chromaticAberration"]  = 14;
         style["chromaticBorderWidth"] = 2;
         style["chromaticOpacity"]     = 0.85;
         style["backgroundColor"]      = "#000000";
@@ -712,11 +716,15 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style[key] = val;
 
         // Normalise snake_case <-> camelCase aliases for liquid glass & blur controls
-        if (key == "blur_radius" || key == "blurRadius" || key == "glass_blur_radius" || key == "glassBlurRadius" ||
-            key == "glass_blur" || key == "glassBlur" || key == "screencopy_blur_radius" || key == "screencopyBlurRadius") {
+        if (key == "blur" || key == "blur_radius" || key == "blurRadius" || key == "blur_strength" || key == "blurStrength" ||
+            key == "glass_blur_radius" || key == "glassBlurRadius" || key == "glass_blur" || key == "glassBlur" ||
+            key == "screencopy_blur_radius" || key == "screencopyBlurRadius") {
             style["screencopyBlurRadius"] = val;
             style["blurRadius"]           = val;
             style["blur_radius"]          = val;
+            style["blurStrength"]         = val;
+            style["blur_strength"]        = val;
+            style["blur"]                 = val;
             style["glassBlurRadius"]      = val;
         }
         if (key == "screencopy_vibrancy" || key == "screencopyVibrancy" || key == "vibrancy" ||
@@ -724,10 +732,12 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
             style["screencopyVibrancy"] = val;
             style["vibrancy"]           = val;
         }
-        if (key == "glass" || key == "use_glass" || key == "useGlass" || key == "screencopy_glass" || key == "useScreencopyGlass") {
-            style["useScreencopyGlass"] = val;
+        if (key == "glass" || key == "use_glass" || key == "useGlass") {
             style["useGlass"]           = val;
             style["glass"]              = val;
+        }
+        if (key == "screencopy_glass" || key == "useScreencopyGlass") {
+            style["useScreencopyGlass"] = val;
         }
         if (key == "live" || key == "live_blur" || key == "liveBlur" || key == "screencopy_live" || key == "screencopyLive" || key == "live_capture" || key == "liveCapture") {
             style["screencopyLive"] = val;

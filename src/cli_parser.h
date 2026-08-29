@@ -9,6 +9,7 @@
 struct ParsedArgs {
     bool        daemonMode  = false;
     bool        mediaMode   = false;    // --media
+    bool        pingMode    = false;    // --ping / --test-glass
     QString     menuName;       // --menu <name>
     QString     configPath;     // --config <path>
     QList<MenuItem> items;      // positional args or stdin

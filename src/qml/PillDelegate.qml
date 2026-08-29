@@ -31,6 +31,22 @@ Item {
     width:  shapeType === "circle" ? height : (pillRow.implicitWidth + 28)
     height: shapeType === "circle" ? (rootRef.s.pillHeight || 48) : (rootRef.s.pillHeight || 42)
 
+    onXChanged: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
+    onYChanged: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
+    onWidthChanged: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
+    onHeightChanged: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
+    Component.onCompleted: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
+
     Behavior on scale {
         NumberAnimation {
             duration: 90
@@ -130,7 +146,7 @@ Item {
             Behavior on opacity { NumberAnimation { duration: 60 } }
         }
 
-        // ── Liquid Glass Multi-Spectral Rainbow Chromatic Prism Dispersion Rim ──
+        // ── Liquid Glass Multi-Spectral Rainbow Chromatic Prism Dispersion Rim (Qt fallback) ──
         Rectangle {
             id: chromaticRim
             anchors.fill: parent
@@ -138,7 +154,7 @@ Item {
             radius: Math.max(0, pillBody.radius - pillBody.border.width)
             color: "transparent"
             border.width: rootRef.s.chromaticBorderWidth !== undefined ? rootRef.s.chromaticBorderWidth : 2
-            visible: (rootRef.s.chromaticAberration === undefined || rootRef.s.chromaticAberration !== 0)
+            visible: rootRef.s.useFakeChromatic === true
             opacity: {
                 let baseOp = rootRef.s.chromaticOpacity !== undefined ? rootRef.s.chromaticOpacity : (typeof rootRef.s.chromaticAberration === "number" && rootRef.s.chromaticAberration <= 1.0 ? rootRef.s.chromaticAberration : 0.85)
                 return pillDelegate.isHovered ? Math.min(1.0, baseOp + 0.15) : baseOp
@@ -158,14 +174,14 @@ Item {
             Behavior on opacity { NumberAnimation { duration: 60 } }
         }
 
-        // ── Liquid Glass Optical Dispersion Sheen (Across entire pill) ──
+        // ── Liquid Glass Optical Dispersion Sheen (Across entire pill, Qt fallback) ──
         Rectangle {
             id: chromaticSheen
             anchors.fill: parent
             anchors.margins: pillBody.border.width
             radius: Math.max(0, pillBody.radius - pillBody.border.width)
             color: "transparent"
-            visible: (rootRef.s.chromaticAberration === undefined || rootRef.s.chromaticAberration !== 0)
+            visible: rootRef.s.useFakeChromatic === true
             opacity: {
                 let baseOp = rootRef.s.chromaticOpacity !== undefined ? (rootRef.s.chromaticOpacity * 0.55) : 0.45
                 return pillDelegate.isHovered ? Math.min(1.0, baseOp + 0.20) : baseOp

@@ -1,10 +1,10 @@
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/render/OpenGL.hpp>
 #include <hyprland/src/render/Renderer.hpp>
-#include <hyprland/src/desktop/view/LayerSurface.hpp>
-#include <hyprland/src/desktop/state/LayerState.hpp>
-#include <hyprland/src/state/MonitorState.hpp>
-#include <hyprland/src/debug/log/Logger.hpp>
+#include <hyprland/src/render/pass/PassElement.hpp>
+#include <hyprland/src/Compositor.hpp>
+#include <hyprutils/math/Misc.hpp>
+#include <hyprutils/math/Mat3x3.hpp>
 #include <lua.hpp>
 #include <GLES3/gl3.h>
 #include <fcntl.h>
@@ -14,9 +14,8 @@
 #include <sstream>
 #include <algorithm>
 #include <mutex>
-#include "Shaders.hpp"
-
 #include <fstream>
+#include "Shaders.hpp"
 
 static void logToFile(const std::string& msg) {
     std::ofstream ofs("/tmp/hypr_liquid_glass.log", std::ios::app);
@@ -53,8 +52,18 @@ struct GlassPill {
 static std::vector<GlassPill> g_pills;
 static std::mutex g_pillMutex;
 
-typedef void (*origRenderLayer)(void* thisptr, PHLLS pLS, PHLMONITOR pMonitor, const Time::steady_tp& now, bool popups, bool lockscreen);
-static CFunctionHook* g_pRenderLayerHook = nullptr;
+static std::atomic<uint64_t> g_renderCount{0};
+static std::atomic<uint64_t> g_preRenderCount{0};
+static std::atomic<uint64_t> g_drawCallCount{0};
+static std::atomic<int> g_lastMonW{0};
+static std::atomic<int> g_lastMonH{0};
+static std::atomic<GLenum> g_lastGLError{GL_NO_ERROR};
+
+static void renderLiquidGlassPills(PHLMONITOR pMonArg);
+static void renderTriangles(PHLMONITOR pMonArg);
+
+static SP<Render::IFramebuffer> g_pSurfaceTempFB;
+static SP<Render::IFramebuffer> g_pSavedCurrentFB;
 
 static GLuint g_program = 0;
 static GLuint g_underlayTex = 0;
@@ -62,6 +71,34 @@ static int g_texW = 0;
 static int g_texH = 0;
 static GLuint g_vbo = 0;
 static GLuint g_vao = 0;
+
+static GLuint g_blitProg = 0;
+static GLuint g_blitVao = 0;
+static GLuint g_blitVbo = 0;
+
+static const char* BLIT_VERT = R"#(
+#version 300 es
+precision highp float;
+layout (location = 0) in vec2 a_pos;
+out vec2 v_uv;
+void main() {
+    v_uv = a_pos * 0.5 + 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+)#";
+
+static const char* BLIT_FRAG = R"#(
+#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 fragColor;
+uniform sampler2D u_tex;
+void main() {
+    vec4 c = texture(u_tex, v_uv);
+    if (c.a <= 0.001) discard;
+    fragColor = c;
+}
+)#";
 
 static GLuint compileShader(GLenum type, const std::string& src) {
     GLuint shader = glCreateShader(type);
@@ -80,11 +117,12 @@ static GLuint compileShader(GLenum type, const std::string& src) {
     return shader;
 }
 
-static GLuint createProgram(const std::string& vSrc, const std::string& fSrc) {
-    GLuint vs = compileShader(GL_VERTEX_SHADER, vSrc);
-    GLuint fs = compileShader(GL_FRAGMENT_SHADER, fSrc);
+static GLuint createProgram(const std::string& vsSrc, const std::string& fsSrc) {
+    GLuint vs = compileShader(GL_VERTEX_SHADER, vsSrc);
+    GLuint fs = compileShader(GL_FRAGMENT_SHADER, fsSrc);
     if (!vs || !fs) {
-        logToFile("createProgram: failed to compile vs or fs");
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
         return 0;
     }
 
@@ -108,23 +146,200 @@ static GLuint createProgram(const std::string& vSrc, const std::string& fSrc) {
     return prog;
 }
 
+static SP<Render::IFramebuffer> g_pUnderlayFB;
+
 static void initGLResources() {
     if (!g_program) {
         g_program = createProgram(Shaders::LIQUID_GLASS_VERT, Shaders::LIQUID_GLASS_FRAG);
     }
-    if (!g_underlayTex) {
-        glGenTextures(1, &g_underlayTex);
-        glBindTexture(GL_TEXTURE_2D, g_underlayTex);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    }
     if (!g_vao) {
         glGenVertexArrays(1, &g_vao);
         glGenBuffers(1, &g_vbo);
+        glBindVertexArray(g_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+        static const float unitQuad[8] = {
+            0.0f, 0.0f,
+            0.0f, 1.0f,
+            1.0f, 0.0f,
+            1.0f, 1.0f,
+        };
+        glBufferData(GL_ARRAY_BUFFER, sizeof(unitQuad), unitQuad, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     }
 }
+
+static void sampleCleanBackground(PHLMONITOR pMonArg) {
+    if (!pMonArg || !g_pHyprRenderer) return;
+    auto source = g_pHyprRenderer->m_renderData.currentFB;
+    if (!source) return;
+
+    int monW = (int)pMonArg->m_transformedSize.x;
+    int monH = (int)pMonArg->m_transformedSize.y;
+    if (monW <= 0 || monH <= 0) return;
+
+    initGLResources();
+
+    if (!g_pUnderlayFB) {
+        g_pUnderlayFB = g_pHyprRenderer->createFB("hypr-liquid-glass-underlay");
+    }
+    if (g_pUnderlayFB->m_size.x != monW || g_pUnderlayFB->m_size.y != monH || g_pUnderlayFB->m_drmFormat != source->m_drmFormat) {
+        g_pUnderlayFB->alloc(monW, monH, source->m_drmFormat);
+    }
+
+    Render::GL::g_pHyprOpenGL->setCapStatus(GL_SCISSOR_TEST, false);
+
+    GLuint sampleFboId = dynamic_cast<Render::GL::CGLFramebuffer*>(g_pUnderlayFB.get())->getFBID();
+    GLuint sourceFboId = dynamic_cast<Render::GL::CGLFramebuffer*>(source.get())->getFBID();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, sampleFboId);
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, sourceFboId);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, sampleFboId);
+    glBlitFramebuffer(0, 0, monW, monH, 0, 0, monW, monH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+}
+
+static void blitTempFB(PHLMONITOR pMon, SP<Render::IFramebuffer> tempFB) {
+    if (!tempFB || !pMon) return;
+    auto tex = tempFB->getTexture();
+    if (!tex) return;
+
+    if (!g_blitProg) {
+        g_blitProg = createProgram(BLIT_VERT, BLIT_FRAG);
+        glGenVertexArrays(1, &g_blitVao);
+        glGenBuffers(1, &g_blitVbo);
+        glBindVertexArray(g_blitVao);
+        glBindBuffer(GL_ARRAY_BUFFER, g_blitVbo);
+        static const float quadVerts[] = {
+            -1.0f, -1.0f,
+             1.0f, -1.0f,
+            -1.0f,  1.0f,
+             1.0f,  1.0f,
+        };
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVerts), quadVerts, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    }
+
+    int monW = (int)pMon->m_transformedSize.x;
+    int monH = (int)pMon->m_transformedSize.y;
+    glViewport(0, 0, monW, monH);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+    glUseProgram(g_blitProg);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex->m_texID);
+    glUniform1i(glGetUniformLocation(g_blitProg, "u_tex"), 0);
+
+    glBindVertexArray(g_blitVao);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+class CLiquidGlassPrePassElement : public IPassElement {
+  public:
+    explicit CLiquidGlassPrePassElement(PHLMONITOR monitor) : m_pMonitor(monitor) {}
+    ~CLiquidGlassPrePassElement() override = default;
+
+    std::vector<UP<IPassElement>> draw() override {
+        if (!m_pMonitor || !g_pHyprRenderer) return {};
+        auto source = g_pHyprRenderer->m_renderData.currentFB;
+        if (!source) return {};
+
+        int monW = (int)m_pMonitor->m_transformedSize.x;
+        int monH = (int)m_pMonitor->m_transformedSize.y;
+
+        // 1. Snapshot clean background BEFORE drmenu draws
+        sampleCleanBackground(m_pMonitor);
+
+        // 2. Allocate or resize temp FBO for drmenu UI
+        DRMFormat tempFormat = (m_pMonitor->useFP16()) ? source->m_drmFormat : DRM_FORMAT_ARGB8888;
+        if (!g_pSurfaceTempFB)
+            g_pSurfaceTempFB = g_pHyprRenderer->createFB("hypr-liquid-glass-temp");
+
+        if (g_pSurfaceTempFB->m_size.x != monW || g_pSurfaceTempFB->m_size.y != monH ||
+            g_pSurfaceTempFB->m_drmFormat != tempFormat)
+            g_pSurfaceTempFB->alloc(monW, monH, tempFormat);
+
+        g_pSavedCurrentFB = source;
+
+        // 3. Redirect currentFB to temp FBO cleared to transparent
+        g_pHyprRenderer->m_renderData.currentFB = g_pSurfaceTempFB;
+        glBindFramebuffer(GL_FRAMEBUFFER, dynamic_cast<Render::GL::CGLFramebuffer*>(g_pSurfaceTempFB.get())->getFBID());
+
+        glViewport(0, 0, monW, monH);
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        return {};
+    }
+
+    [[nodiscard]] bool needsLiveBlur() override { return true; }
+    [[nodiscard]] bool needsPrecomputeBlur() override { return false; }
+    [[nodiscard]] bool disableSimplification() override { return true; }
+    [[nodiscard]] const char* passName() override { return "CLiquidGlassPrePassElement"; }
+    [[nodiscard]] ePassElementType type() override { return EK_CUSTOM; }
+
+    [[nodiscard]] std::optional<CBox> boundingBox() override {
+        if (m_pMonitor) {
+            return CBox{0, 0, m_pMonitor->m_size.x, m_pMonitor->m_size.y};
+        }
+        return std::nullopt;
+    }
+
+  private:
+    PHLMONITOR m_pMonitor;
+};
+
+class CLiquidGlassCompositeElement : public IPassElement {
+  public:
+    explicit CLiquidGlassCompositeElement(PHLMONITOR monitor) : m_pMonitor(monitor) {}
+    ~CLiquidGlassCompositeElement() override = default;
+
+    std::vector<UP<IPassElement>> draw() override {
+        if (!m_pMonitor || !g_pHyprRenderer) return {};
+
+        // 1. Restore real monitor framebuffer
+        if (g_pSavedCurrentFB) {
+            g_pHyprRenderer->m_renderData.currentFB = g_pSavedCurrentFB;
+            glBindFramebuffer(GL_FRAMEBUFFER, dynamic_cast<Render::GL::CGLFramebuffer*>(g_pSavedCurrentFB.get())->getFBID());
+        }
+
+        // 2. Draw liquid glass pills using clean background
+        renderLiquidGlassPills(m_pMonitor);
+        renderTriangles(m_pMonitor);
+
+        // 3. Composite drmenu UI from temp FBO on top of glass
+        if (g_pSurfaceTempFB) {
+            blitTempFB(m_pMonitor, g_pSurfaceTempFB);
+        }
+
+        g_pSavedCurrentFB.reset();
+        return {};
+    }
+
+    [[nodiscard]] bool needsLiveBlur() override { return false; }
+    [[nodiscard]] bool needsPrecomputeBlur() override { return false; }
+    [[nodiscard]] bool disableSimplification() override { return true; }
+    [[nodiscard]] const char* passName() override { return "CLiquidGlassCompositeElement"; }
+    [[nodiscard]] ePassElementType type() override { return EK_CUSTOM; }
+
+    [[nodiscard]] std::optional<CBox> boundingBox() override {
+        if (m_pMonitor) {
+            return CBox{0, 0, m_pMonitor->m_size.x, m_pMonitor->m_size.y};
+        }
+        return std::nullopt;
+    }
+
+  private:
+    PHLMONITOR m_pMonitor;
+};
 
 static void renderLiquidGlassPills(PHLMONITOR pMonArg) {
     std::vector<GlassPill> pillsCopy;
@@ -134,21 +349,33 @@ static void renderLiquidGlassPills(PHLMONITOR pMonArg) {
         pillsCopy = g_pills;
     }
 
+    if (!pMonArg || !g_pHyprRenderer || !g_pHyprRenderer->m_renderData.currentFB) return;
+    if (!g_pUnderlayFB || !g_pUnderlayFB->getTexture()) return;
+    auto curFB = g_pHyprRenderer->m_renderData.currentFB;
+
     GLint prevVp[4];
     glGetIntegerv(GL_VIEWPORT, prevVp);
-    int monW = prevVp[2] > 0 ? prevVp[2] : 1920;
-    int monH = prevVp[3] > 0 ? prevVp[3] : 1080;
+    int monW = pMonArg->m_transformedSize.x > 0 ? (int)pMonArg->m_transformedSize.x : (curFB->m_size.x > 0 ? (int)curFB->m_size.x : (prevVp[2] > 0 ? prevVp[2] : 1920));
+    int monH = pMonArg->m_transformedSize.y > 0 ? (int)pMonArg->m_transformedSize.y : (curFB->m_size.y > 0 ? (int)curFB->m_size.y : (prevVp[3] > 0 ? prevVp[3] : 1080));
 
     initGLResources();
     if (!g_program) return;
 
+    g_renderCount++;
+    g_lastMonW = monW;
+    g_lastMonH = monH;
+
     // Save existing OpenGL state completely
-    GLint prevProg = 0, prevVao = 0, prevVbo = 0, prevTex = 0, prevActiveTex = 0;
+    GLint prevProg = 0, prevVao = 0, prevVbo = 0, prevTex0 = 0, prevActiveTex = 0;
+    GLint prevDrawFb = 0, prevReadFb = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFb);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
     glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVao);
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prevVbo);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex0);
     GLint prevScissor[4];
     glGetIntegerv(GL_SCISSOR_BOX, prevScissor);
     GLboolean prevScissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
@@ -156,18 +383,13 @@ static void renderLiquidGlassPills(PHLMONITOR pMonArg) {
     GLint prevBlendSrc = 0, prevBlendDst = 0;
     glGetIntegerv(GL_BLEND_SRC_RGB, &prevBlendSrc);
     glGetIntegerv(GL_BLEND_DST_RGB, &prevBlendDst);
+    GLboolean prevColorMask[4];
+    glGetBooleanv(GL_COLOR_WRITEMASK, prevColorMask);
 
-    // Snapshot underlying screen texture for Poisson refractive sampling
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, g_underlayTex);
-    if (g_texW != monW || g_texH != monH) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, monW, monH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        g_texW = monW;
-        g_texH = monH;
-    }
-    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, monW, monH);
+    curFB->bind();
 
     // Disable scissor and setup viewport for full unclipped drawing
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDisable(GL_SCISSOR_TEST);
     glViewport(0, 0, monW, monH);
     glDisable(GL_DEPTH_TEST);
@@ -176,9 +398,12 @@ static void renderLiquidGlassPills(PHLMONITOR pMonArg) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glUseProgram(g_program);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, g_pUnderlayFB->getTexture()->m_texID);
     glUniform1i(glGetUniformLocation(g_program, "u_tex"), 0);
     glUniform2f(glGetUniformLocation(g_program, "u_resolution"), (float)monW, (float)monH);
 
+    GLint uProj = glGetUniformLocation(g_program, "u_proj");
     GLint uRect = glGetUniformLocation(g_program, "u_pill_rect");
     GLint uRadius = glGetUniformLocation(g_program, "u_corner_radius");
     GLint uBlur = glGetUniformLocation(g_program, "u_blur_strength");
@@ -190,30 +415,18 @@ static void renderLiquidGlassPills(PHLMONITOR pMonArg) {
     GLint uBorderW = glGetUniformLocation(g_program, "u_border_width");
 
     glBindVertexArray(g_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+
+    const auto transform = Math::wlTransformToHyprutils(
+        Math::invertTransform(pMonArg->m_transform));
 
     for (const auto& pill : pillsCopy) {
         if (pill.w <= 0.0f || pill.h <= 0.0f) continue;
 
-        // Convert pixel coordinates to OpenGL NDC [-1, 1]
-        float left = (pill.x / (float)monW) * 2.0f - 1.0f;
-        float right = ((pill.x + pill.w) / (float)monW) * 2.0f - 1.0f;
-        float top = 1.0f - (pill.y / (float)monH) * 2.0f;
-        float bottom = 1.0f - ((pill.y + pill.h) / (float)monH) * 2.0f;
+        CBox pillBox{pill.x, pill.y, pill.w, pill.h};
+        Mat3x3 glMatrix = g_pHyprRenderer->projectBoxToTarget(pillBox, transform);
+        glMatrix.transpose();
 
-        float quadVertices[] = {
-            left,  top,    0.0f, 0.0f,
-            left,  bottom, 0.0f, 1.0f,
-            right, top,    1.0f, 0.0f,
-            right, bottom, 1.0f, 1.0f,
-        };
-
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_DYNAMIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-
+        glUniformMatrix3fv(uProj, 1, GL_FALSE, glMatrix.getMatrix().data());
         glUniform4f(uRect, pill.x, pill.y, pill.w, pill.h);
         glUniform1f(uRadius, pill.radius);
         glUniform1f(uBlur, pill.blur);
@@ -225,15 +438,25 @@ static void renderLiquidGlassPills(PHLMONITOR pMonArg) {
         glUniform1f(uBorderW, pill.borderWidth);
 
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        g_drawCallCount++;
+    }
+
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        g_lastGLError = err;
     }
 
     // Full state restoration
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFb);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFb);
+    glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
     glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
     glScissor(prevScissor[0], prevScissor[1], prevScissor[2], prevScissor[3]);
     if (prevScissorEnabled) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
     if (!prevBlend) glDisable(GL_BLEND); else { glEnable(GL_BLEND); glBlendFunc(prevBlendSrc, prevBlendDst); }
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, prevTex0);
     glActiveTexture(prevActiveTex);
-    glBindTexture(GL_TEXTURE_2D, prevTex);
     glBindVertexArray(prevVao);
     glBindBuffer(GL_ARRAY_BUFFER, prevVbo);
     glUseProgram(prevProg);
@@ -348,12 +571,13 @@ static void renderTriangles(PHLMONITOR pMonArg) {
     }
 
     // Full OpenGL state preservation
-    GLint prevProg = 0, prevVao = 0, prevVbo = 0, prevTex = 0, prevActiveTex = 0;
+    GLint prevProg = 0, prevVao = 0, prevVbo = 0, prevTex0 = 0, prevActiveTex = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVao);
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prevVbo);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex);
     glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex0);
     GLint prevScissor[4];
     glGetIntegerv(GL_SCISSOR_BOX, prevScissor);
     GLboolean prevScissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
@@ -361,6 +585,8 @@ static void renderTriangles(PHLMONITOR pMonArg) {
     GLint prevBlendSrc = 0, prevBlendDst = 0;
     glGetIntegerv(GL_BLEND_SRC_RGB, &prevBlendSrc);
     glGetIntegerv(GL_BLEND_DST_RGB, &prevBlendDst);
+    GLboolean prevColorMask[4];
+    glGetBooleanv(GL_COLOR_WRITEMASK, prevColorMask);
 
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDisable(GL_SCISSOR_TEST);
@@ -412,12 +638,14 @@ static void renderTriangles(PHLMONITOR pMonArg) {
     }
 
     // Full state restoration
+    glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
     glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
     glScissor(prevScissor[0], prevScissor[1], prevScissor[2], prevScissor[3]);
     if (prevScissorEnabled) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
     if (!prevBlend) glDisable(GL_BLEND); else { glEnable(GL_BLEND); glBlendFunc(prevBlendSrc, prevBlendDst); }
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, prevTex0);
     glActiveTexture(prevActiveTex);
-    glBindTexture(GL_TEXTURE_2D, prevTex);
     glBindVertexArray(prevVao);
     glBindBuffer(GL_ARRAY_BUFFER, prevVbo);
     glUseProgram(prevProg);
@@ -464,15 +692,6 @@ static void parseTrianglesString(const std::string& input) {
     logToFile("parseTrianglesString: received " + std::to_string(newTris.size()) + " triangles");
 
     writeTrianglesToFile(newTris);
-
-    if (State::monitorState()) {
-        for (auto& mon : State::monitorState()->monitors()) {
-            if (mon && mon->m_enabled) {
-                mon->m_forceFullFrames = 4;
-                mon->scheduleFrame();
-            }
-        }
-    }
 }
 
 // Parses string format: "x y w h [radius] [blur] [refr] [chrom] [spec] [milkyR milkyG milkyB milkyA] [borderR borderG borderB borderA borderW]"
@@ -492,30 +711,33 @@ static void parsePillsString(const std::string& input) {
         newPills.push_back(pill);
     }
 
-    logToFile("parsePillsString: received " + std::to_string(newPills.size()) + " pills");
+    if (!newPills.empty()) {
+        logToFile("parsePillsString: received " + std::to_string(newPills.size()) + " pills, p0=(" + std::to_string(newPills[0].x) + "," + std::to_string(newPills[0].y) + "," + std::to_string(newPills[0].w) + "," + std::to_string(newPills[0].h) + ") blur=" + std::to_string(newPills[0].blur) + " refr=" + std::to_string(newPills[0].refraction));
+    }
 
     {
         std::lock_guard<std::mutex> lock(g_pillMutex);
         g_pills = std::move(newPills);
     }
+}
 
-    if (State::monitorState()) {
-        for (auto& mon : State::monitorState()->monitors()) {
-            if (mon && mon->m_enabled) {
-                mon->m_forceFullFrames = 4;
-                mon->scheduleFrame();
-            }
+static void scheduleRepaint() {
+    try {
+        if (g_pHyprRenderer) {
+            g_pHyprRenderer->damageBox(0, 0, 99999, 99999);
         }
-    }
+    } catch (...) {}
 }
 
 static SDispatchResult handleTriangles(std::string args) {
     parseTrianglesString(args);
+    scheduleRepaint();
     return {false, true, ""};
 }
 
 static SDispatchResult handlePills(std::string args) {
     parsePillsString(args);
+    scheduleRepaint();
     return {false, true, ""};
 }
 
@@ -525,20 +747,14 @@ static SDispatchResult handleClear(std::string args) {
         g_pills.clear();
     }
     writeTrianglesToFile({});
-    if (State::monitorState()) {
-        for (auto& mon : State::monitorState()->monitors()) {
-            if (mon && mon->m_enabled) {
-                mon->m_forceFullFrames = 4;
-                mon->scheduleFrame();
-            }
-        }
-    }
+    scheduleRepaint();
     return {false, true, ""};
 }
 
 static int luaTriangles(lua_State* L) {
     const char* str = luaL_optstring(L, 1, "");
     parseTrianglesString(str);
+    scheduleRepaint();
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -546,6 +762,7 @@ static int luaTriangles(lua_State* L) {
 static int luaPills(lua_State* L) {
     const char* str = luaL_optstring(L, 1, "");
     parsePillsString(str);
+    scheduleRepaint();
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -557,30 +774,14 @@ static int luaClear(lua_State* L) {
         g_pills.clear();
     }
     writeTrianglesToFile({});
-    if (State::monitorState()) {
-        for (auto& mon : State::monitorState()->monitors()) {
-            if (mon && mon->m_enabled) {
-                mon->m_forceFullFrames = 4;
-                mon->scheduleFrame();
-            }
-        }
-    }
+    scheduleRepaint();
     lua_pushboolean(L, 1);
     return 1;
 }
 
 static void forceFrames() {
     updateActiveCountFromFile();
-    if (State::monitorState()) {
-        for (auto& mon : State::monitorState()->monitors()) {
-            if (mon && mon->m_enabled) {
-                if (g_pHyprRenderer)
-                    g_pHyprRenderer->damageMonitor(mon);
-                mon->m_forceFullFrames = 4;
-                mon->scheduleFrame();
-            }
-        }
-    }
+    scheduleRepaint();
 }
 
 static SDispatchResult handleRefresh(std::string args) {
@@ -594,6 +795,38 @@ static int luaRefresh(lua_State* L) {
     return 1;
 }
 
+static int luaPing(lua_State* L) {
+    size_t pillCount = 0;
+    std::string pillSample = "none";
+    {
+        std::lock_guard<std::mutex> lock(g_pillMutex);
+        pillCount = g_pills.size();
+        if (!g_pills.empty()) {
+            const auto& p = g_pills[0];
+            std::stringstream ps;
+            ps << "[x=" << (int)p.x << " y=" << (int)p.y
+               << " w=" << (int)p.w << " h=" << (int)p.h
+               << " rad=" << (int)p.radius << " blur=" << (int)p.blur << "]";
+            pillSample = ps.str();
+        }
+    }
+    std::stringstream ss;
+    ss << "PONG: hypr-liquid-glass v0.1.0\n"
+       << "  * Active Pills: " << pillCount << " (sample: " << pillSample << ")\n"
+       << "  * Shader Program: " << g_program << "\n"
+       << "  * Underlay Texture: " << g_underlayTex << " (" << g_texW << "x" << g_texH << ")\n"
+       << "  * Framebuffer Size: " << g_lastMonW.load() << "x" << g_lastMonH.load() << "\n"
+       << "  * Frames Rendered: " << g_renderCount.load() << "\n"
+       << "  * Draw Calls: " << g_drawCallCount.load() << "\n"
+       << "  * Pre-Render Events: " << g_preRenderCount.load() << "\n"
+       << "  * OpenGL State: " << (g_lastGLError.load() == GL_NO_ERROR ? "GL_NO_ERROR (OK)" : ("GL_ERROR " + std::to_string(g_lastGLError.load())));
+    
+    std::string response = ss.str();
+    logToFile("luaPing called -> " + response);
+    lua_pushstring(L, response.c_str());
+    return 1;
+}
+
 static bool hasActiveShapes() {
     {
         std::lock_guard<std::mutex> lock(g_pillMutex);
@@ -602,32 +835,60 @@ static bool hasActiveShapes() {
     return g_activeTriangleCount.load() > 0;
 }
 
-static CHyprSignalListener g_renderStageListener;
 static CHyprSignalListener g_renderPreListener;
+
+typedef void (*origRenderLayer)(void* thisptr, PHLLS pLS, PHLMONITOR pMonitor, const Time::steady_tp& now, bool popups, bool lockscreen);
+static CFunctionHook* g_pRenderLayerHook = nullptr;
+
+static void hkRenderLayer(void* thisptr, PHLLS layerSurface, PHLMONITOR monitor, const Time::steady_tp& now, bool popups, bool lockscreen) {
+    if (!popups && layerSurface && layerSurface->m_namespace == "drmenu") {
+        if (g_pHyprRenderer) {
+            auto currentPosition = layerSurface->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
+            auto currentSize     = layerSurface->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
+            const float scale = monitor ? monitor->m_scale : 1.0f;
+            auto box = CBox{currentPosition, currentSize};
+            box.expand(32.0f / scale).noNegativeSize();
+            if (box.w > 0.0 && box.h > 0.0)
+                g_pHyprRenderer->damageBox(box);
+
+            // 1. Pre-surface pass: snapshot clean background, redirect currentFB to temp FBO
+            g_pHyprRenderer->m_renderPass.add(makeUnique<CLiquidGlassPrePassElement>(monitor));
+
+            // 2. Render drmenu surface into temp FBO
+            if (g_pRenderLayerHook && g_pRenderLayerHook->m_original) {
+                ((origRenderLayer)g_pRenderLayerHook->m_original)(thisptr, layerSurface, monitor, now, popups, lockscreen);
+            }
+
+            // 3. Post-surface pass: restore currentFB, draw liquid glass, composite drmenu UI on top
+            g_pHyprRenderer->m_renderPass.add(makeUnique<CLiquidGlassCompositeElement>(monitor));
+            return;
+        }
+    }
+    if (g_pRenderLayerHook && g_pRenderLayerHook->m_original) {
+        ((origRenderLayer)g_pRenderLayerHook->m_original)(thisptr, layerSurface, monitor, now, popups, lockscreen);
+    }
+}
 
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
     logToFile("PLUGIN_INIT called");
 
-    // Clean up any lingering trampoline hooks from previous in-memory compilations
-    if (g_pFunctionHookSystem) {
-        struct HookSystemHack {
-            std::vector<UP<CFunctionHook>> m_hooks;
-        };
-        auto* hack = reinterpret_cast<HookSystemHack*>(g_pFunctionHookSystem.get());
-        for (auto& hook : hack->m_hooks) {
-            if (hook) {
-                hook->unhook();
+    auto renderLayerMatches = HyprlandAPI::findFunctionsByName(PHANDLE, "renderLayer");
+    for (const auto& match : renderLayerMatches) {
+        if (match.demangled.contains("renderLayer") && match.demangled.contains("LayerSurface")) {
+            g_pRenderLayerHook = HyprlandAPI::createFunctionHook(PHANDLE, match.address, (void*)hkRenderLayer);
+            if (g_pRenderLayerHook) {
+                g_pRenderLayerHook->hook();
+                logToFile("renderLayer hooked successfully!");
             }
+            break;
         }
-        hack->m_hooks.clear();
-        logToFile("All lingering hooks unhooked and cleared successfully!");
     }
 
-    g_renderPreListener = Event::bus()->m_events.render.pre.registerListener([](std::any d) {
+    g_renderPreListener = Event::bus()->m_events.render.pre.listen([](PHLMONITOR pMon) {
+        g_preRenderCount++;
         try {
-            PHLMONITOR pMon = std::any_cast<PHLMONITOR>(d);
             if (pMon && pMon->m_enabled && hasActiveShapes()) {
                 pMon->m_forceFullFrames = 2;
                 if (g_pHyprRenderer)
@@ -636,22 +897,12 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         } catch (...) {}
     });
 
-    g_renderStageListener = Event::bus()->m_events.render.stage.registerListener([](std::any d) {
-        try {
-            eRenderStage stage = std::any_cast<eRenderStage>(d);
-            if (stage == RENDER_POST_WINDOWS || stage == RENDER_LAST_MOMENT) {
-                renderLiquidGlassPills(nullptr);
-                renderTriangles(nullptr);
-            }
-        } catch (...) {}
-    });
-    logToFile("render.stage listener registered successfully!");
-
     SHyprCtlCommand cmdTriangles;
     cmdTriangles.name = "liquid_glass_triangles";
     cmdTriangles.exact = true;
     cmdTriangles.fn = [](eHyprCtlOutputFormat format, std::string args) -> std::string {
         parseTrianglesString(args);
+        scheduleRepaint();
         return "ok\n";
     };
     HyprlandAPI::registerHyprCtlCommand(PHANDLE, cmdTriangles);
@@ -661,6 +912,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     cmdPills.exact = true;
     cmdPills.fn = [](eHyprCtlOutputFormat format, std::string args) -> std::string {
         parsePillsString(args);
+        scheduleRepaint();
         return "ok\n";
     };
     HyprlandAPI::registerHyprCtlCommand(PHANDLE, cmdPills);
@@ -683,49 +935,48 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     };
     HyprlandAPI::registerHyprCtlCommand(PHANDLE, cmdRefresh);
 
+    SHyprCtlCommand cmdPing;
+    cmdPing.name = "liquid_glass_ping";
+    cmdPing.exact = true;
+    cmdPing.fn = [](eHyprCtlOutputFormat format, std::string args) -> std::string {
+        size_t pillCount = 0;
+        {
+            std::lock_guard<std::mutex> lock(g_pillMutex);
+            pillCount = g_pills.size();
+        }
+        return "PONG: hypr-liquid-glass v0.1.0 is active (active pills: " + std::to_string(pillCount) + 
+               ", shader program: " + std::to_string(g_program) + ")\n";
+    };
+    HyprlandAPI::registerHyprCtlCommand(PHANDLE, cmdPing);
+
     HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_triangles", handleTriangles);
     HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_pills", handlePills);
     HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_clear", handleClear);
     HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_refresh", handleRefresh);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "liquid_glass_ping", [](std::string args) -> SDispatchResult {
+        return {false, true, ""};
+    });
 
     HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "set_triangles", luaTriangles);
     HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "set_pills", luaPills);
     HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "clear", luaClear);
     HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "refresh", luaRefresh);
+    HyprlandAPI::addLuaFunction(PHANDLE, "liquid_glass", "ping", luaPing);
 
     return {"hypr-liquid-glass", "Apple Liquid Glass & Vector Overlay Compositor", "drmenu", "0.1.0"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
-    g_renderStageListener = nullptr;
-    g_renderPreListener = nullptr;
-    if (g_triProgram) {
-        glDeleteProgram(g_triProgram);
-        g_triProgram = 0;
+    if (g_pRenderLayerHook) {
+        g_pRenderLayerHook->unhook();
     }
-    if (g_triVbo) {
-        glDeleteBuffers(1, &g_triVbo);
-        g_triVbo = 0;
+    if (g_pHyprRenderer) {
+        g_pHyprRenderer->m_renderPass.removeAllOfType("CLiquidGlassPrePassElement");
+        g_pHyprRenderer->m_renderPass.removeAllOfType("CLiquidGlassCompositeElement");
     }
-    if (g_triVao) {
-        glDeleteVertexArrays(1, &g_triVao);
-        g_triVao = 0;
-    }
-    if (g_program) {
-        glDeleteProgram(g_program);
-        g_program = 0;
-    }
-    if (g_underlayTex) {
-        glDeleteTextures(1, &g_underlayTex);
-        g_underlayTex = 0;
-    }
-    if (g_vbo) {
-        glDeleteBuffers(1, &g_vbo);
-        g_vbo = 0;
-    }
-    if (g_vao) {
-        glDeleteVertexArrays(1, &g_vao);
-        g_vao = 0;
-    }
+    g_pSurfaceTempFB.reset();
+    g_pSavedCurrentFB.reset();
+    g_renderPreListener.reset();
     PHANDLE = nullptr;
+    logToFile("PLUGIN_EXIT cleanly finished");
 }

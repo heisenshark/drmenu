@@ -27,6 +27,7 @@ public:
                          float refraction = 0.008f);
 
     static void deactivate();
+    static QString ping();
 
 private:
     static QString generateShader(int screenWidth, int screenHeight,

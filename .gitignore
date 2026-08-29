@@ -22,3 +22,4 @@ build-arch/
 result
 result-*
 build-plugin/
+*.so

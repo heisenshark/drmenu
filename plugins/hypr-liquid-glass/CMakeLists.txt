@@ -3,7 +3,7 @@ project(hypr-liquid-glass LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "-fPIC -O3 -Wall -Wno-unused-variable -Wno-unused-parameter")
+set(CMAKE_CXX_FLAGS "-fPIC -O3 -Wall -Wno-unused-variable -Wno-unused-parameter --no-gnu-unique -fvisibility=default")
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(DEPS REQUIRED hyprland pixman-1 cairo pangocairo libdrm)

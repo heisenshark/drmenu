@@ -128,7 +128,10 @@ static void sendHyprlandSocketCommand(const std::string& cmd) {
     const char* his = getenv("HYPRLAND_INSTANCE_SIGNATURE");
     if (!his || !his[0]) return;
 
-    std::string sockPath = "/run/user/1000/hypr/" + std::string(his) + "/.socket.sock";
+    const char* xdg = getenv("XDG_RUNTIME_DIR");
+    std::string xdgDir = xdg ? std::string(xdg) : ("/run/user/" + std::to_string(getuid()));
+    std::string sockPath = xdgDir + "/hypr/" + std::string(his) + "/.socket.sock";
+
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) return;
 
@@ -155,38 +158,79 @@ void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
     Q_UNUSED(screenWidth);
     Q_UNUSED(screenHeight);
     Q_UNUSED(centerX);
-    Q_UNUSED(centerY);
-    Q_UNUSED(vibrancy);
-
-    TargetScreenInfo screenInfo = ScreenDetector::getTargetScreenInfo();
-    int monOffsetX = screenInfo.monitorX;
-    int monOffsetY = screenInfo.monitorY;
-
     QString pillData;
     QTextStream ss(&pillData);
 
     for (int i = 0; i < pills.size(); ++i) {
         const PillGeometry &p = pills[i];
-        float px = (float)monOffsetX + p.x - p.halfWidth;
-        float py = (float)monOffsetY + p.y - p.halfHeight;
+        float px = p.x - p.halfWidth;
+        float py = p.y - p.halfHeight;
         float pw = p.halfWidth * 2.0f;
         float ph = p.halfHeight * 2.0f;
         float rad = p.radius > 0.0f ? p.radius : 18.0f;
-        float blur = blurRadius > 0.0f ? blurRadius : 24.0f;
-        float refr = refraction > 0.0f ? refraction : 0.85f;
-        float chrom = chromaticAberration > 0.0f ? chromaticAberration : 1.4f;
+        float blur = (blurRadius >= 0.0f) ? blurRadius : 24.0f;
+        float refr = (refraction >= 0.0f) ? refraction : 0.85f;
+        float chrom = (chromaticAberration >= 0.0f) ? chromaticAberration : 1.4f;
         float spec = 0.70f;
 
         // format: x y w h radius blur refr chrom spec milkyR milkyG milkyB milkyA borderR borderG borderB borderA borderW;
-        ss << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9 1.0 1.0 1.0 0.12 1.0 1.0 1.0 0.40 1.5;")
-                .arg(px).arg(py).arg(pw).arg(ph).arg(rad).arg(blur).arg(refr).arg(chrom).arg(spec);
+        ss << QString::number(px, 'f', 2) << " "
+           << QString::number(py, 'f', 2) << " "
+           << QString::number(pw, 'f', 2) << " "
+           << QString::number(ph, 'f', 2) << " "
+           << QString::number(rad, 'f', 2) << " "
+           << QString::number(blur, 'f', 2) << " "
+           << QString::number(refr, 'f', 2) << " "
+           << QString::number(chrom, 'f', 2) << " "
+           << QString::number(spec, 'f', 2) << " "
+           << "1.0 1.0 1.0 0.12 1.0 1.0 1.0 0.40 1.5;";
     }
 
-    std::string luaCall = "/repl return hl.plugin.liquid_glass.set_pills([[" + pillData.toStdString() + "]])";
+    std::string luaCall = "/repl return (hl.plugin and hl.plugin.liquid_glass and hl.plugin.liquid_glass.set_pills) and hl.plugin.liquid_glass.set_pills([[" + pillData.toStdString() + "]])";
     sendHyprlandSocketCommand(luaCall);
 }
 
 void HyprlandGlassShader::deactivate() {
     if (!isSupported()) return;
-    sendHyprlandSocketCommand("/repl return hl.plugin.liquid_glass.clear()");
+    sendHyprlandSocketCommand("/repl return (hl.plugin and hl.plugin.liquid_glass and hl.plugin.liquid_glass.clear) and hl.plugin.liquid_glass.clear()");
+}
+
+QString HyprlandGlassShader::ping() {
+    const char* his = getenv("HYPRLAND_INSTANCE_SIGNATURE");
+    if (!his || !his[0]) return "ERROR: HYPRLAND_INSTANCE_SIGNATURE is not set in environment.";
+
+    const char* xdg = getenv("XDG_RUNTIME_DIR");
+    std::string xdgDir = xdg ? std::string(xdg) : ("/run/user/" + std::to_string(getuid()));
+    std::string sockPath = xdgDir + "/hypr/" + std::string(his) + "/.socket.sock";
+
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return "ERROR: Failed to create UNIX domain socket.";
+
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof(tv));
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sockPath.c_str(), sizeof(addr.sun_path) - 1);
+
+    if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+        close(fd);
+        return "ERROR: Failed to connect to Hyprland socket at " + QString::fromStdString(sockPath);
+    }
+
+    std::string cmd = "/repl return (hl.plugin and hl.plugin.liquid_glass and hl.plugin.liquid_glass.ping) and hl.plugin.liquid_glass.ping() or (hl.plugin and hl.plugin.liquid_glass and 'PONG: liquid_glass plugin table exists in Hyprland' or 'PLUGIN_STATUS: Hyprland socket connected OK, but hypr-liquid-glass plugin is currently not loaded')";
+    (void)write(fd, cmd.c_str(), cmd.size());
+
+    char buf[2048] = {0};
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+
+    if (n > 0) {
+        return QString::fromUtf8(buf, n).trimmed();
+    }
+    return "ERROR: Connected to Hyprland socket, but received no response within 1s timeout.";
 }
