@@ -38,6 +38,11 @@ uniform vec4 u_milky_tint;
 uniform vec4 u_border_color;
 uniform float u_border_width;
 
+// Interleaved Gradient Noise for sub-pixel spatial dithering
+float ign(vec2 p) {
+    return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+}
+
 // Signed distance field for rounded rectangle
 float sdRoundedBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
@@ -76,36 +81,35 @@ void main() {
 
     vec3 col = vec3(0.0);
 
-    // Multi-tap Poisson frosted blur driven directly by u_blur_strength
+    // Multi-tap Golden Ratio Vogel Spiral frosted blur with spatial dithering and Gaussian decay
     float effectiveBlur = max(0.0, u_blur_strength);
     if (effectiveBlur > 0.01) {
-        vec2 rad = (effectiveBlur * 0.9) / u_resolution;
-        const vec2 taps[24] = vec2[24](
-            vec2(-0.326212, -0.405805), vec2(-0.840144, -0.073580),
-            vec2(-0.695914,  0.457137), vec2(-0.203345,  0.620716),
-            vec2( 0.962340, -0.194983), vec2( 0.473434, -0.480026),
-            vec2( 0.519456,  0.767022), vec2( 0.185461, -0.893124),
-            vec2( 0.507431,  0.064425), vec2( 0.896420,  0.412458),
-            vec2(-0.321940, -0.932615), vec2(-0.791559, -0.597705),
-            vec2(-0.214444,  0.211431), vec2(-0.413941,  0.864928),
-            vec2( 0.034502, -0.320490), vec2( 0.213567,  0.264288),
-            vec2(-0.552123, -0.231241), vec2(-0.412532, -0.712314),
-            vec2(-0.112451, -0.612452), vec2(-0.732145,  0.151241),
-            vec2(-0.452141,  0.412451), vec2( 0.151241,  0.852141),
-            vec2( 0.612451,  0.312451), vec2( 0.781245, -0.451241)
-        );
+        vec2 rad = effectiveBlur / u_resolution;
+        float dither = ign(gl_FragCoord.xy) * 6.283185307;
+        const int SAMPLES = 48;
+        const float GOLDEN_ANGLE = 2.399963229728653; // pi * (3.0 - sqrt(5.0))
 
         vec3 accum = vec3(0.0);
-        for (int i = 0; i < 24; ++i) {
-            vec2 offset = taps[i] * rad;
-            vec2 rUV = clamp(refrUV + chromOffset + offset * 1.05, 0.001, 0.999);
+        float totalWeight = 0.0;
+
+        for (int i = 0; i < SAMPLES; ++i) {
+            float fi = float(i);
+            float r = sqrt((fi + 0.5) / float(SAMPLES));
+            float theta = fi * GOLDEN_ANGLE + dither;
+            vec2 offset = vec2(cos(theta), sin(theta)) * (r * rad);
+
+            float weight = exp(-2.2 * r * r);
+
+            vec2 rUV = clamp(refrUV + chromOffset + offset * 1.04, 0.001, 0.999);
             vec2 gUV = clamp(refrUV + offset, 0.001, 0.999);
-            vec2 bUV = clamp(refrUV - chromOffset + offset * 0.95, 0.001, 0.999);
-            accum.r += texture(u_tex, rUV).r;
-            accum.g += texture(u_tex, gUV).g;
-            accum.b += texture(u_tex, bUV).b;
+            vec2 bUV = clamp(refrUV - chromOffset + offset * 0.96, 0.001, 0.999);
+
+            accum.r += texture(u_tex, rUV).r * weight;
+            accum.g += texture(u_tex, gUV).g * weight;
+            accum.b += texture(u_tex, bUV).b * weight;
+            totalWeight += weight;
         }
-        col = accum * 0.04166667;
+        col = accum / totalWeight;
     } else {
         col.r = texture(u_tex, clamp(refrUV + chromOffset, 0.001, 0.999)).r;
         col.g = texture(u_tex, clamp(refrUV, 0.001, 0.999)).g;
