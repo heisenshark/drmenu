@@ -129,12 +129,19 @@ Item {
     Rectangle {
         anchors.centerIn: parent
         visible: !(rootRef.hasParent && menuContainerRef.hoveredIndex === -1)
-        width:  menuContainerRef.hoveredIndex !== -1 ? 8 : 5
+        width:  menuContainerRef.hoveredIndex !== -1 ? 7 : 4
         height: width
         radius: width / 2
-        color:  menuContainerRef.hoveredIndex !== -1
+        color: {
+            if (rootRef.s.glass === true || rootRef.s.useGlass === true) {
+                return menuContainerRef.hoveredIndex !== -1
+                    ? (rootRef.s.centerDotHoverColor || "#a0ffffff")
+                    : (rootRef.s.centerDotColor || "#60ffffff")
+            }
+            return menuContainerRef.hoveredIndex !== -1
                 ? (rootRef.s.centerDotHoverColor || "#3b82f6")
                 : (rootRef.s.centerDotColor || "#808080")
+        }
 
         Behavior on width { NumberAnimation { duration: 40 } }
         Behavior on color { ColorAnimation  { duration: 40 } }
