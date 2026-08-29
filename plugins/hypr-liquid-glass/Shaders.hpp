@@ -38,11 +38,6 @@ uniform vec4 u_milky_tint;
 uniform vec4 u_border_color;
 uniform float u_border_width;
 
-// Interleaved Gradient Noise for sub-pixel spatial dithering
-float ign(vec2 p) {
-    return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
-}
-
 // Signed distance field for rounded rectangle
 float sdRoundedBox(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
@@ -81,34 +76,67 @@ void main() {
 
     vec3 col = vec3(0.0);
 
-    // Multi-tap Golden Ratio Vogel Spiral frosted blur with spatial dithering and Gaussian decay
+    // Noise-free multi-ring concentric Gaussian blur
     float effectiveBlur = max(0.0, u_blur_strength);
     if (effectiveBlur > 0.01) {
         vec2 rad = effectiveBlur / u_resolution;
-        float dither = ign(gl_FragCoord.xy) * 6.283185307;
-        const int SAMPLES = 48;
-        const float GOLDEN_ANGLE = 2.399963229728653; // pi * (3.0 - sqrt(5.0))
 
-        vec3 accum = vec3(0.0);
-        float totalWeight = 0.0;
+        // Center tap (weight 1.0)
+        vec3 accum = vec3(
+            texture(u_tex, clamp(refrUV + chromOffset, 0.001, 0.999)).r,
+            texture(u_tex, clamp(refrUV, 0.001, 0.999)).g,
+            texture(u_tex, clamp(refrUV - chromOffset, 0.001, 0.999)).b
+        );
+        float totalWeight = 1.0;
 
-        for (int i = 0; i < SAMPLES; ++i) {
-            float fi = float(i);
-            float r = sqrt((fi + 0.5) / float(SAMPLES));
-            float theta = fi * GOLDEN_ANGLE + dither;
-            vec2 offset = vec2(cos(theta), sin(theta)) * (r * rad);
-
-            float weight = exp(-2.2 * r * r);
-
-            vec2 rUV = clamp(refrUV + chromOffset + offset * 1.04, 0.001, 0.999);
-            vec2 gUV = clamp(refrUV + offset, 0.001, 0.999);
-            vec2 bUV = clamp(refrUV - chromOffset + offset * 0.96, 0.001, 0.999);
-
-            accum.r += texture(u_tex, rUV).r * weight;
-            accum.g += texture(u_tex, gUV).g * weight;
-            accum.b += texture(u_tex, bUV).b * weight;
-            totalWeight += weight;
+        // Ring 1: 6 samples at r = 0.22, weight = 0.88
+        const int R1_COUNT = 6;
+        for (int i = 0; i < R1_COUNT; ++i) {
+            float a = float(i) * 1.047197551; // 2pi / 6
+            vec2 offset = vec2(cos(a), sin(a)) * (0.22 * rad);
+            float w = 0.88;
+            accum.r += texture(u_tex, clamp(refrUV + chromOffset + offset * 1.02, 0.001, 0.999)).r * w;
+            accum.g += texture(u_tex, clamp(refrUV + offset, 0.001, 0.999)).g * w;
+            accum.b += texture(u_tex, clamp(refrUV - chromOffset + offset * 0.98, 0.001, 0.999)).b * w;
+            totalWeight += w;
         }
+
+        // Ring 2: 10 samples at r = 0.45, weight = 0.65
+        const int R2_COUNT = 10;
+        for (int i = 0; i < R2_COUNT; ++i) {
+            float a = float(i) * 0.628318531 + 0.314159265; // 2pi / 10 + offset
+            vec2 offset = vec2(cos(a), sin(a)) * (0.45 * rad);
+            float w = 0.65;
+            accum.r += texture(u_tex, clamp(refrUV + chromOffset + offset * 1.03, 0.001, 0.999)).r * w;
+            accum.g += texture(u_tex, clamp(refrUV + offset, 0.001, 0.999)).g * w;
+            accum.b += texture(u_tex, clamp(refrUV - chromOffset + offset * 0.97, 0.001, 0.999)).b * w;
+            totalWeight += w;
+        }
+
+        // Ring 3: 14 samples at r = 0.72, weight = 0.40
+        const int R3_COUNT = 14;
+        for (int i = 0; i < R3_COUNT; ++i) {
+            float a = float(i) * 0.448798951 + 0.157079633; // 2pi / 14 + offset
+            vec2 offset = vec2(cos(a), sin(a)) * (0.72 * rad);
+            float w = 0.40;
+            accum.r += texture(u_tex, clamp(refrUV + chromOffset + offset * 1.04, 0.001, 0.999)).r * w;
+            accum.g += texture(u_tex, clamp(refrUV + offset, 0.001, 0.999)).g * w;
+            accum.b += texture(u_tex, clamp(refrUV - chromOffset + offset * 0.96, 0.001, 0.999)).b * w;
+            totalWeight += w;
+        }
+
+        // Ring 4: 18 samples at r = 1.00, weight = 0.20
+        const int R4_COUNT = 18;
+        for (int i = 0; i < R4_COUNT; ++i) {
+            float a = float(i) * 0.349065850 + 0.471238898; // 2pi / 18 + offset
+            vec2 offset = vec2(cos(a), sin(a)) * (1.00 * rad);
+            float w = 0.20;
+            accum.r += texture(u_tex, clamp(refrUV + chromOffset + offset * 1.05, 0.001, 0.999)).r * w;
+            accum.g += texture(u_tex, clamp(refrUV + offset, 0.001, 0.999)).g * w;
+            accum.b += texture(u_tex, clamp(refrUV - chromOffset + offset * 0.95, 0.001, 0.999)).b * w;
+            totalWeight += w;
+        }
+
         col = accum / totalWeight;
     } else {
         col.r = texture(u_tex, clamp(refrUV + chromOffset, 0.001, 0.999)).r;
