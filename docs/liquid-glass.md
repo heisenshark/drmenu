@@ -28,16 +28,19 @@
  [ 4. Apple CAFilterColorSaturate Vibrancy Boost ]
                       │
                       ▼
- [ 5. Inner Edge Ambient Occlusion ]
+ [ 5. Smart Adaptive Luminance Contrast & Edge Darkening ]
                       │
                       ▼
- [ 6. Substrate Translucent Acrylic Tint ]
+ [ 6. Inner Edge Ambient Occlusion ]
                       │
                       ▼
- [ 7. Fresnel Specular Surface Reflection ]
+ [ 7. Substrate Translucent Acrylic Tint ]
                       │
                       ▼
- [ 8. Anti-Aliased Outer Boundary Blit to Monitor ]
+ [ 8. Fresnel Specular Surface Reflection ]
+                      │
+                      ▼
+ [ 9. Anti-Aliased Outer Boundary Blit to Monitor ]
 ```
 
 ---

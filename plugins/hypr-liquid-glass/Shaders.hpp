@@ -160,16 +160,28 @@ void main() {
     float gray = dot(col, vec3(0.299, 0.587, 0.114));
     col = mix(vec3(gray), col, 1.22);
 
-    // 2. Inner Edge Ambient Occlusion (internal refractive depth)
+    // 2. Smart Adaptive Background Luminance Contrast (Readability over bright white windows)
+    float bgLum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    float adaptFactor = smoothstep(0.42, 0.88, bgLum);
+    if (adaptFactor > 0.001) {
+        // Intelligently attenuate over-exposure and blend in smoked contrast substrate
+        vec3 darkSubstrate = col * 0.38 + vec3(0.04, 0.04, 0.08);
+        col = mix(col, darkSubstrate, adaptFactor * 0.50);
+        // Add subtle edge ambient darkening so glass pill boundary clearly contrasts with white background
+        float edgeDarkening = smoothstep(0.0, 3.5, abs(dist));
+        col *= mix(0.72, 1.0, edgeDarkening * (1.0 - adaptFactor * 0.45));
+    }
+
+    // 3. Inner Edge Ambient Occlusion (internal refractive depth)
     float innerEdgeShadow = smoothstep(0.0, 1.0, edgeFactor);
     col *= mix(0.92, 1.0, innerEdgeShadow);
 
-    // 3. Substrate Material Tint (Frosted milk / acrylic pigment)
+    // 4. Substrate Material Tint (Frosted milk / acrylic pigment)
     if (u_milky_tint.a > 0.0) {
         col = mix(col, u_milky_tint.rgb, u_milky_tint.a);
     }
 
-    // 4. Fresnel Surface Specular Sheen (Air-glass reflection + top rim highlight)
+    // 5. Fresnel Surface Specular Sheen (Air-glass reflection + top rim highlight)
     if (u_specular_strength > 0.001) {
         vec2 lightDir = normalize(vec2(-0.35, -0.93));
         float nDotL = max(0.0, dot(normal, -lightDir));

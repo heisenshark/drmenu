@@ -15,6 +15,8 @@ Both `camelCase` and `snake_case` keys are automatically recognized.
 | `radiusDistance` | `number` | `185` | Distance in pixels from origin to menu items |
 | `fontFamily` | `string` | `"SF Pro Display, Inter, Sans"` | Font family for labels and key badges |
 | `fontSize` | `number` | `13` | Base font pixel size |
+| `showTextShadow` / `text_shadow` | `bool` | `true` | Enable micro-shadow ambient contours behind text and icons for readability on white backgrounds |
+| `textShadowColor` / `text_shadow_color` | `string` | `"#45000000"` | Shadow color for text micro-shadows |
 
 ---
 

@@ -870,6 +870,14 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
             style["scaleDuration"]        = val;
             style["scale_duration"]       = val;
         }
+        if (key == "text_shadow" || key == "textShadow" || key == "show_text_shadow" || key == "showTextShadow") {
+            style["showTextShadow"]       = val;
+            style["show_text_shadow"]      = val;
+        }
+        if (key == "text_shadow_color" || key == "textShadowColor") {
+            style["textShadowColor"]      = val;
+            style["text_shadow_color"]     = val;
+        }
     }
 
     return style;

@@ -277,6 +277,8 @@ Item {
                 font.family: rootRef.s.fontFamily || "Sans"
                 font.pixelSize: Math.max(9, (rootRef.s.fontSize || 13) - 3)
                 font.bold: true
+                style: (rootRef.s.showTextShadow !== false) ? Text.Outline : Text.Normal
+                styleColor: (rootRef.s.textShadowColor !== undefined) ? rootRef.s.textShadowColor : "#45000000"
                 color: pillDelegate.isHovered
                        ? (rootRef.s.accentColor || "#e67e22")
                        : (rootRef.s.numberBadgeColor || "#686878")
@@ -302,6 +304,8 @@ Item {
                 font.family:    rootRef.s.fontFamily || "Sans"
                 font.pixelSize: pillDelegate.hasEmoji ? ((rootRef.s.fontSize || 13) + 4) : (rootRef.s.fontSize || 13)
                 font.bold:      !pillDelegate.hasEmoji
+                style: (rootRef.s.showTextShadow !== false) ? Text.Outline : Text.Normal
+                styleColor: (rootRef.s.textShadowColor !== undefined) ? rootRef.s.textShadowColor : "#45000000"
                 color: {
                     let useSubAccent = (rootRef.s.showSubmenuAccent !== false) && (rootRef.s.useSubmenuAccent !== false) && (rootRef.s.submenuAccent !== "transparent") && (rootRef.s.submenuAccent !== "none")
                     if (pillDelegate.isHovered) {
@@ -322,6 +326,8 @@ Item {
                 font.family: rootRef.s.fontFamily || "Sans"
                 font.pixelSize: rootRef.s.fontSize || 13
                 font.bold:   pillDelegate.isHovered
+                style: (rootRef.s.showTextShadow !== false) ? Text.Outline : Text.Normal
+                styleColor: (rootRef.s.textShadowColor !== undefined) ? rootRef.s.textShadowColor : "#45000000"
                 color:       pillDelegate.isHovered
                              ? (rootRef.s.textHoverColor || "#ffffff")
                              : (rootRef.s.textColor || "#d0d0d5")
@@ -332,6 +338,8 @@ Item {
                 visible: pillDelegate.isSubmenu && pillDelegate.shapeType !== "circle" && (rootRef.s.showSubmenuIndicator !== false)
                 text:    "▶"
                 font.pixelSize: Math.max(8, (rootRef.s.fontSize || 13) - 4)
+                style: (rootRef.s.showTextShadow !== false) ? Text.Outline : Text.Normal
+                styleColor: (rootRef.s.textShadowColor !== undefined) ? rootRef.s.textShadowColor : "#45000000"
                 color: {
                     let useSubAccent = (rootRef.s.showSubmenuAccent !== false) && (rootRef.s.useSubmenuAccent !== false) && (rootRef.s.submenuAccent !== "transparent") && (rootRef.s.submenuAccent !== "none")
                     if (pillDelegate.isHovered) {
