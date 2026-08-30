@@ -14,7 +14,8 @@ Both `camelCase` and `snake_case` keys are automatically recognized.
 | `layout` | `string` | `"pills"` | Menu layout mode: `"pills"` (floating pills) or `"pie"` (segmented circle) |
 | `radiusDistance` | `number` | `185` | Distance in pixels from origin to menu items |
 | `fontFamily` | `string` | `"SF Pro Display, Inter, Sans"` | Font family for labels and key badges |
-| `fontSize` | `number` | `13` | Base font pixel size |
+| `fontSize` / `font_size` | `number` | `13` | Base font pixel size for pill labels |
+| `iconSize` / `icon_size` | `number` | `22` | Pixel width & height for application/system icons |
 | `showTextShadow` / `text_shadow` | `bool` | `true` | Enable micro-shadow ambient contours behind text and icons for readability on white backgrounds |
 | `textShadowColor` / `text_shadow_color` | `string` | `"#45000000"` | Shadow color for text micro-shadows |
 

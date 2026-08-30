@@ -910,6 +910,18 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
             style["textShadowColor"]      = val;
             style["text_shadow_color"]     = val;
         }
+        if (key == "font_size" || key == "fontSize") {
+            style["fontSize"]  = val;
+            style["font_size"] = val;
+        }
+        if (key == "icon_size" || key == "iconSize") {
+            style["iconSize"]  = val;
+            style["icon_size"] = val;
+        }
+        if (key == "font_family" || key == "fontFamily") {
+            style["fontFamily"]  = val;
+            style["font_family"] = val;
+        }
     }
 
     return style;
