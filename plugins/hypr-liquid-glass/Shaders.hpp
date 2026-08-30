@@ -78,11 +78,11 @@ void main() {
     float lensSlope = sin((1.0 - edgeFactor) * 1.57079632679);
 
     // Refraction vector (bends texture coordinate in screen space along true normal)
-    vec2 refr = normal * (lensSlope * u_refraction_strength * 14.0) / u_resolution;
+    vec2 refr = normal * (lensSlope * u_refraction_strength * 16.0) / u_resolution;
     vec2 refrUV = screenUV - refr;
 
-    // Chromatic dispersion offsets along true normal
-    vec2 chromOffset = normal * (u_chromatic_aberration * 3.5 * lensSlope) / u_resolution;
+    // Chromatic dispersion offsets along true normal (vivid physical prism split)
+    vec2 chromOffset = normal * (u_chromatic_aberration * 5.5 * lensSlope) / u_resolution;
 
     vec3 col = vec3(0.0);
 
@@ -106,9 +106,9 @@ void main() {
             float a = float(i) * 1.047197551; // 2pi / 6
             vec2 offset = vec2(cos(a), sin(a)) * (0.22 * rad);
             float w = 0.88;
-            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset + offset * 1.02, 0.001, 0.999), lod).r * w;
+            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset * 1.05 + offset * 1.02, 0.001, 0.999), lod).r * w;
             accum.g += textureLod(u_tex, clamp(refrUV + offset, 0.001, 0.999), lod).g * w;
-            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset + offset * 0.98, 0.001, 0.999), lod).b * w;
+            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset * 1.05 + offset * 0.98, 0.001, 0.999), lod).b * w;
             totalWeight += w;
         }
 
@@ -118,9 +118,9 @@ void main() {
             float a = float(i) * 0.628318531 + 0.314159265; // 2pi / 10 + offset
             vec2 offset = vec2(cos(a), sin(a)) * (0.45 * rad);
             float w = 0.65;
-            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset + offset * 1.03, 0.001, 0.999), lod).r * w;
+            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset * 1.10 + offset * 1.03, 0.001, 0.999), lod).r * w;
             accum.g += textureLod(u_tex, clamp(refrUV + offset, 0.001, 0.999), lod).g * w;
-            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset + offset * 0.97, 0.001, 0.999), lod).b * w;
+            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset * 1.10 + offset * 0.97, 0.001, 0.999), lod).b * w;
             totalWeight += w;
         }
 
@@ -130,9 +130,9 @@ void main() {
             float a = float(i) * 0.448798951 + 0.157079633; // 2pi / 14 + offset
             vec2 offset = vec2(cos(a), sin(a)) * (0.72 * rad);
             float w = 0.40;
-            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset + offset * 1.04, 0.001, 0.999), lod).r * w;
+            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset * 1.15 + offset * 1.04, 0.001, 0.999), lod).r * w;
             accum.g += textureLod(u_tex, clamp(refrUV + offset, 0.001, 0.999), lod).g * w;
-            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset + offset * 0.96, 0.001, 0.999), lod).b * w;
+            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset * 1.15 + offset * 0.96, 0.001, 0.999), lod).b * w;
             totalWeight += w;
         }
 
@@ -142,9 +142,9 @@ void main() {
             float a = float(i) * 0.349065850 + 0.471238898; // 2pi / 18 + offset
             vec2 offset = vec2(cos(a), sin(a)) * (1.00 * rad);
             float w = 0.20;
-            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset + offset * 1.05, 0.001, 0.999), lod).r * w;
+            accum.r += textureLod(u_tex, clamp(refrUV + chromOffset * 1.20 + offset * 1.05, 0.001, 0.999), lod).r * w;
             accum.g += textureLod(u_tex, clamp(refrUV + offset, 0.001, 0.999), lod).g * w;
-            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset + offset * 0.95, 0.001, 0.999), lod).b * w;
+            accum.b += textureLod(u_tex, clamp(refrUV - chromOffset * 1.20 + offset * 0.95, 0.001, 0.999), lod).b * w;
             totalWeight += w;
         }
 
