@@ -4,7 +4,7 @@ import QtQuick.Shapes
 Item {
     id: pieDelimitersOverlay
     visible: rootRef.isPieMode && (rootRef.s.delimiterWidth !== 0)
-    z: 1
+    z: 10
     anchors.fill: parent
 
     property var rootRef: root
