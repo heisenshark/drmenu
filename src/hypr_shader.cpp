@@ -174,7 +174,7 @@ void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
         float chrom = (p.chromatic >= 0.0f) ? p.chromatic : ((chromaticAberration >= 0.0f) ? chromaticAberration : 1.4f);
         float spec = (p.specular >= 0.0f) ? p.specular : ((specular >= 0.0f) ? specular : 0.70f);
 
-        // format: x y w h radius blur refr chrom spec milkyR milkyG milkyB milkyA borderR borderG borderB borderA borderW;
+        // format: x y w h radius blur refr chrom spec milkyR milkyG milkyB milkyA borderR borderG borderB borderA borderW shapeType startAngle endAngle innerRadius outerRadius;
         ss << QString::number(px, 'f', 2) << " "
            << QString::number(py, 'f', 2) << " "
            << QString::number(pw, 'f', 2) << " "
@@ -192,7 +192,12 @@ void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
            << QString::number(p.borderG, 'f', 2) << " "
            << QString::number(p.borderB, 'f', 2) << " "
            << QString::number(p.borderA, 'f', 2) << " "
-           << QString::number(p.borderWidth, 'f', 2) << ";";
+           << QString::number(p.borderWidth, 'f', 2) << " "
+           << QString::number(p.shapeType) << " "
+           << QString::number(p.startAngle, 'f', 4) << " "
+           << QString::number(p.endAngle, 'f', 4) << " "
+           << QString::number(p.innerRadius, 'f', 2) << " "
+           << QString::number(p.outerRadius, 'f', 2) << ";";
     }
 
     std::string luaCall = "/repl return (hl.plugin and hl.plugin.liquid_glass and hl.plugin.liquid_glass.set_pills) and hl.plugin.liquid_glass.set_pills([[" + pillData.toStdString() + "]])";

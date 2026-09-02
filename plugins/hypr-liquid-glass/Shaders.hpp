@@ -37,6 +37,9 @@ uniform float u_specular_strength;
 uniform vec4 u_milky_tint;
 uniform vec4 u_border_color;
 uniform float u_border_width;
+uniform int u_shape_type; // 0 = rounded box, 1 = pie wedge sector
+uniform vec2 u_pie_angles; // startAngle, endAngle in radians
+uniform vec2 u_pie_radii;  // innerRadius, outerRadius in pixels
 
 // Signed distance field for rounded rectangle
 float sdRoundedBox(vec2 p, vec2 b, float r) {
@@ -44,11 +47,47 @@ float sdRoundedBox(vec2 p, vec2 b, float r) {
     return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
 }
 
+// Signed distance field for annular pie wedge sector
+float sdPieWedge(vec2 p, float startAngle, float endAngle, float rIn, float rOut, float cornerRad) {
+    float midAngle = (startAngle + endAngle) * 0.5;
+    float halfAngle = abs(endAngle - startAngle) * 0.5;
+
+    // Rotate p by -midAngle so the sector is centered on +X axis
+    float cosM = cos(-midAngle);
+    float sinM = sin(-midAngle);
+    vec2 pr = vec2(cosM * p.x - sinM * p.y, sinM * p.x + cosM * p.y);
+
+    // Exploit symmetry across X axis
+    pr.y = abs(pr.y);
+
+    vec2 cs = vec2(cos(halfAngle), sin(halfAngle));
+    vec2 spokeNorm = vec2(-cs.y, cs.x);
+
+    float r = length(pr);
+    float dRadial = max(r - rOut, rIn - r);
+    float dSpoke = dot(pr, spokeNorm);
+
+    if (dSpoke <= 0.0) {
+        return dRadial - cornerRad;
+    }
+
+    float t = clamp(dot(pr, cs), rIn, rOut);
+    vec2 closestPt = cs * t;
+    return length(pr - closestPt) - cornerRad;
+}
+
+float evaluateSDF(vec2 p, vec2 b, float r) {
+    if (u_shape_type == 1) {
+        return sdPieWedge(p, u_pie_angles.x, u_pie_angles.y, u_pie_radii.x, u_pie_radii.y, max(0.0, r));
+    }
+    return sdRoundedBox(p, b, r);
+}
+
 // True isotropic gradient normal of the signed distance field
 vec2 getSDFNormal(vec2 p, vec2 b, float r) {
     const float eps = 0.5;
-    float dx = sdRoundedBox(p + vec2(eps, 0.0), b, r) - sdRoundedBox(p - vec2(eps, 0.0), b, r);
-    float dy = sdRoundedBox(p + vec2(0.0, eps), b, r) - sdRoundedBox(p - vec2(0.0, eps), b, r);
+    float dx = evaluateSDF(p + vec2(eps, 0.0), b, r) - evaluateSDF(p - vec2(eps, 0.0), b, r);
+    float dy = evaluateSDF(p + vec2(0.0, eps), b, r) - evaluateSDF(p - vec2(0.0, eps), b, r);
     float len = length(vec2(dx, dy));
     return len > 0.0001 ? vec2(dx, dy) / len : vec2(0.0);
 }
@@ -58,7 +97,7 @@ void main() {
     vec2 halfSize = pillSize * 0.5;
     vec2 p = (v_texcoord - 0.5) * pillSize;
 
-    float dist = sdRoundedBox(p, halfSize, u_corner_radius);
+    float dist = evaluateSDF(p, halfSize, u_corner_radius);
     
     // Smooth anti-aliased edge
     float edgeAlpha = 1.0 - smoothstep(0.0, 1.5, dist);
@@ -72,9 +111,9 @@ void main() {
     // Geometric SDF normal vector
     vec2 normal = getSDFNormal(p, halfSize, max(1.0, u_corner_radius));
 
-    // Optical edge profile: full curvature for round pills, sleek 2.5px micro-bevel for rectangles
+    // Optical edge profile: full curvature for round pills/sectors, sleek 2.5px micro-bevel for rectangles
     float edgeDist = max(0.0, -dist);
-    float bevelMargin = (u_corner_radius >= 12.0) ? u_corner_radius : max(2.5, u_corner_radius);
+    float bevelMargin = (u_shape_type == 1) ? 6.0 : ((u_corner_radius >= 12.0) ? u_corner_radius : max(2.5, u_corner_radius));
     float edgeFactor = clamp(edgeDist / bevelMargin, 0.0, 1.0);
     float lensSlope = sin((1.0 - edgeFactor) * 1.57079632679);
 

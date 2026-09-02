@@ -19,6 +19,11 @@ struct PillGeometry {
     float milkyR = 1.0f, milkyG = 1.0f, milkyB = 1.0f, milkyA = 0.12f;
     float borderR = 1.0f, borderG = 1.0f, borderB = 1.0f, borderA = 0.40f;
     float borderWidth = 1.5f;
+    int shapeType = 0; // 0 = rounded box, 1 = pie wedge sector
+    float startAngle = 0.0f; // radians
+    float endAngle = 0.0f;   // radians
+    float innerRadius = 0.0f; // pixels
+    float outerRadius = 0.0f; // pixels
 };
 
 class HyprlandGlassShader {

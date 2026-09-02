@@ -47,6 +47,11 @@ struct GlassPill {
     float borderColorB = 1.0f;
     float borderColorA = 0.40f;
     float borderWidth = 1.5f;
+    int shapeType = 0; // 0 = rounded box, 1 = pie wedge sector
+    float startAngle = 0.0f;
+    float endAngle = 0.0f;
+    float innerRadius = 0.0f;
+    float outerRadius = 0.0f;
 };
 
 static std::vector<GlassPill> g_pills;
@@ -423,6 +428,9 @@ static void renderLiquidGlassPills(PHLMONITOR pMonArg) {
     GLint uMilky = glGetUniformLocation(g_program, "u_milky_tint");
     GLint uBorderCol = glGetUniformLocation(g_program, "u_border_color");
     GLint uBorderW = glGetUniformLocation(g_program, "u_border_width");
+    GLint uShapeType = glGetUniformLocation(g_program, "u_shape_type");
+    GLint uPieAngles = glGetUniformLocation(g_program, "u_pie_angles");
+    GLint uPieRadii  = glGetUniformLocation(g_program, "u_pie_radii");
 
     glBindVertexArray(g_vao);
 
@@ -446,6 +454,9 @@ static void renderLiquidGlassPills(PHLMONITOR pMonArg) {
         glUniform4f(uMilky, pill.milkyTintR, pill.milkyTintG, pill.milkyTintB, pill.milkyTintA);
         glUniform4f(uBorderCol, pill.borderColorR, pill.borderColorG, pill.borderColorB, pill.borderColorA);
         glUniform1f(uBorderW, pill.borderWidth);
+        glUniform1i(uShapeType, pill.shapeType);
+        glUniform2f(uPieAngles, pill.startAngle, pill.endAngle);
+        glUniform2f(uPieRadii, pill.innerRadius, pill.outerRadius);
 
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         g_drawCallCount++;
@@ -718,6 +729,11 @@ static void parsePillsString(const std::string& input) {
         ls >> pill.radius >> pill.blur >> pill.refraction >> pill.chromatic >> pill.specular;
         ls >> pill.milkyTintR >> pill.milkyTintG >> pill.milkyTintB >> pill.milkyTintA;
         ls >> pill.borderColorR >> pill.borderColorG >> pill.borderColorB >> pill.borderColorA >> pill.borderWidth;
+        if (ls >> pill.shapeType >> pill.startAngle >> pill.endAngle >> pill.innerRadius >> pill.outerRadius) {
+            // parsed pie geometry
+        } else {
+            pill.shapeType = 0;
+        }
         newPills.push_back(pill);
     }
 

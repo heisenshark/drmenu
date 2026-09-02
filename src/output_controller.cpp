@@ -102,6 +102,21 @@ void OutputController::activateGlassShader(int screenW, int screenH, float cente
         if (m.contains("specular")) {
             p.specular = m["specular"].toFloat();
         }
+        if (m.contains("shapeType")) {
+            p.shapeType = m["shapeType"].toInt();
+        }
+        if (m.contains("startAngle")) {
+            p.startAngle = m["startAngle"].toFloat();
+        }
+        if (m.contains("endAngle")) {
+            p.endAngle = m["endAngle"].toFloat();
+        }
+        if (m.contains("innerRadius")) {
+            p.innerRadius = m["innerRadius"].toFloat();
+        }
+        if (m.contains("outerRadius")) {
+            p.outerRadius = m["outerRadius"].toFloat();
+        }
 
         pills.append(p);
     }
