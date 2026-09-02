@@ -292,6 +292,106 @@ Window {
         let pills = []
         let cx = menuContainer.centerX
         let cy = menuContainer.centerY
+
+        if (root.isPieMode) {
+            let outR = root.s.outerRadius || 230
+            let inR = root.s.innerRadius || 65
+            let isAnyHov = (menuContainer.hoveredIndex !== -1)
+            let hovIdx = menuContainer.hoveredIndex
+            let pieDiscR = isAnyHov ? (outR + 6) : outR
+
+            // 1. The Main Liquid Glass Pie Wheel Disc
+            let pieCol = root.s.pieSliceColor || root.s.pieBackgroundColor || "#25121218"
+            let pieBorderCol = root.s.pieOuterBorderColor || "#40ffffff"
+            let pieBW = root.s.pieOuterBorderWidth !== undefined ? root.s.pieOuterBorderWidth : 1.0
+
+            pills.push({
+                x: cx,
+                y: cy,
+                halfWidth: pieDiscR,
+                halfHeight: pieDiscR,
+                radius: pieDiscR,
+                blur: blurRad,
+                refraction: refr,
+                chromatic: chrom,
+                specular: spec,
+                pillColor: pieCol,
+                borderColor: pieBorderCol,
+                borderWidth: pieBW
+            })
+
+            // 2. Embedded Glass Option Badges per sector
+            let sliceAngleDeg = 360 / count
+            let contentRadius = (inR + outR) / 2
+
+            for (let i = 0; i < count; ++i) {
+                let itemObj = menuModel.get(i)
+                let isHov = (hovIdx === i)
+                let hProg = isHov ? 1.0 : 0.0
+                let s = isHov ? 1.08 : 1.0
+
+                let startDeg = i * sliceAngleDeg - 90
+                let midRad = (startDeg + sliceAngleDeg / 2) * Math.PI / 180
+                let optX = cx + contentRadius * Math.cos(midRad)
+                let optY = cy + contentRadius * Math.sin(midRad)
+
+                let labelText = (itemObj && itemObj.label) ? itemObj.label : ""
+                let hasIcon = (itemObj && ((itemObj.iconName && itemObj.iconName !== "") || (itemObj.icon && itemObj.icon !== "")))
+                let iconW = hasIcon ? ((root.s.iconSize || 22) + 7) : 0
+                let badgeW = (root.s.showNumberBadges !== false) ? 18 : 0
+                let textW = labelText.length * 8.5
+                let optW = Math.max(72.0, iconW + badgeW + textW + 22.0) * s
+                let optH = 36.0 * s
+                let optRad = (root.s.optionRectRadius !== undefined ? root.s.optionRectRadius : 10.0) * s
+
+                let isSub = itemObj && itemObj.submenuName && itemObj.submenuName !== ""
+                let useSubAccent = isSub && (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
+
+                let baseOptCol = (root.s.optionRectColor || (useSubAccent && root.s.pillSubmenuColor ? root.s.pillSubmenuColor : "#25ffffff"))
+                let hovOptCol = (root.s.optionRectHoverColor || (useSubAccent && root.s.submenuAccent ? root.s.submenuAccent : (root.s.accentColor || "#600a84ff")))
+                let baseOptBrd = (root.s.optionRectBorder || (useSubAccent && root.s.pillSubmenuBorder ? root.s.pillSubmenuBorder : "#35ffffff"))
+                let hovOptBrd = (root.s.optionRectHoverBorder || (useSubAccent && root.s.pillSubmenuBorderHover ? root.s.pillSubmenuBorderHover : (root.s.accentColor || "#0a84ff")))
+
+                let optCol = isHov ? hovOptCol : baseOptCol
+                let optBorderCol = isHov ? hovOptBrd : baseOptBrd
+
+                pills.push({
+                    x: optX,
+                    y: optY,
+                    halfWidth: optW / 2.0,
+                    halfHeight: optH / 2.0,
+                    radius: optRad,
+                    blur: blurRad + (blurHover - blurRad) * hProg,
+                    refraction: refr + (refrHover - refr) * hProg,
+                    chromatic: chrom + (chromHover - chrom) * hProg,
+                    specular: spec + (specHover - spec) * hProg,
+                    pillColor: optCol,
+                    borderColor: optBorderCol,
+                    borderWidth: isHov ? 2.0 : 1.0
+                })
+            }
+
+            // 3. Center Origin / Torus
+            let centerRad = inR
+            pills.push({
+                x: cx,
+                y: cy,
+                halfWidth: centerRad,
+                halfHeight: centerRad,
+                radius: centerRad,
+                blur: blurRad,
+                refraction: refr * 0.8,
+                chromatic: chrom,
+                specular: spec,
+                pillColor: root.s.centerColor || "transparent",
+                borderColor: root.s.centerBorderColor || root.s.centerTorusColor || "#40ffffff",
+                borderWidth: root.s.centerBorderWidth || root.s.centerTorusThickness || 2.0
+            })
+
+            output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr, spec)
+            return
+        }
+
         let rDist = root.s.radiusDistance || 185
         let pHalfH = (root.s.pillHeight || 42) / 2
         let pRad = (root.s.pillRadius !== undefined) ? root.s.pillRadius
