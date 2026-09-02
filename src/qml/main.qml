@@ -792,10 +792,10 @@ Window {
 
         // ── Current menu breadcrumb label ────────────────────────────────────────
         Text {
-            visible: (root.s.showBreadcrumbs !== false) && root.menuStack.length > 0
+            visible: (root.s.showBreadcrumbs !== false) && root.menuStack.length > (root.isPieMode ? 1 : 0)
             x: menuContainer.centerX - width / 2
             y: root.isPieMode
-                ? (menuContainer.centerY - height / 2 + (root.hasParent ? 14 : 0))
+                ? (menuContainer.centerY + (root.s.outerRadius || 230) + 14)
                 : (menuContainer.centerY + (root.s.centerRadius || 15) + 10)
             text: root.menuStack.join(" › ")
             font.family: root.s.fontFamily || "Sans"

@@ -7,7 +7,8 @@ Item {
     property var rootRef: root
     property var menuContainerRef: menuContainer
 
-    property bool isBlenderMode: rootRef.s.centerLayout === "torus" || (rootRef.s.showCenterArc && rootRef.s.centerBorderWidth === 0)
+    property bool isGlass: (rootRef.s.glass === true || rootRef.s.useGlass === true)
+    property bool isBlenderMode: !isGlass && (rootRef.s.centerLayout === "torus" || (rootRef.s.showCenterArc === true && rootRef.s.centerBorderWidth === 0))
     property real torusRadius: isBlenderMode ? (rootRef.s.torusRadius || 26) : (rootRef.isPieMode ? (rootRef.s.innerRadius || 65) : (rootRef.s.centerRadius || 15))
 
     x: menuContainerRef.centerX - width  / 2
@@ -120,11 +121,11 @@ Item {
     Text {
         id: backArrowText
         anchors.centerIn: parent
-        anchors.verticalCenterOffset: (rootRef.isPieMode && rootRef.hasParent) ? -12 : 0
+        anchors.verticalCenterOffset: 0
         visible: rootRef.hasParent && menuContainerRef.hoveredIndex === -1
         text: "←"
         font.family: rootRef.s.fontFamily || "Sans"
-        font.pixelSize: (rootRef.s.fontSize || 13) + (rootRef.isPieMode ? 6 : 2)
+        font.pixelSize: (rootRef.s.fontSize || 13) + 2
         font.bold: true
         scale: (menuContainerRef.hoveredIndex === -1) ? 1.25 : 1.0
 

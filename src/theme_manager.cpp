@@ -72,6 +72,15 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
     style["showGuideRing"]        = true;
     style["showPointerLine"]      = true;
     style["showBreadcrumbs"]      = true;
+    style["centerLayout"]         = "circle";
+    style["showCenterArc"]        = false;
+    style["centerBorderWidth"]    = 2;
+    style["torusRadius"]          = 26;
+    style["centerTorusThickness"] = 8;
+    style["centerTorusColor"]     = "transparent";
+    style["centerArcColor"]       = "transparent";
+    style["centerArcWidth"]       = 0;
+    style["centerArcAngle"]       = 0;
 
     if (name == "pie" || name == "wheel") {
         style["layout"]               = "pie";
