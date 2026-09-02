@@ -23,7 +23,26 @@ Item {
     property bool hasEmoji:   icon !== ""
 
     property real innerR: rootRef.s.innerRadius || 65
-    property real outerR: isHovered ? ((rootRef.s.outerRadius || 230) + 12) : (rootRef.s.outerRadius || 230)
+    property real baseOuterR: rootRef.s.outerRadius || 230
+    property real outerR: baseOuterR + 12.0 * hoverProgress
+
+    property int hDuration: (rootRef && rootRef.s && (rootRef.s.hoverDuration !== undefined)) ? rootRef.s.hoverDuration : 110
+    property real hoverProgress: isHovered ? 1.0 : 0.0
+    Behavior on hoverProgress {
+        NumberAnimation {
+            duration: pieSectorDelegate.hDuration
+            easing.type: Easing.OutCubic
+        }
+    }
+    onHoverProgressChanged: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
+    onOuterRChanged: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
+    Component.onCompleted: {
+        if (rootRef && rootRef.updateGlassOptics) rootRef.updateGlassOptics()
+    }
 
     property real count: menuContainerRef.itemCount
     property real sliceAngleDeg: 360 / count
@@ -35,7 +54,7 @@ Item {
     property real endRad:   endDeg   * Math.PI / 180
     property real midRad:   (startDeg + sliceAngleDeg / 2) * Math.PI / 180
 
-    property real contentRadius: (innerR + (rootRef.s.outerRadius || 230)) / 2
+    property real contentRadius: (innerR + baseOuterR) / 2
     property real contentX: menuContainerRef.centerX + contentRadius * Math.cos(midRad)
     property real contentY: menuContainerRef.centerY + contentRadius * Math.sin(midRad)
 
@@ -87,8 +106,7 @@ Item {
         width: pieRow.implicitWidth + (rootRef.s.highlightOptionRect ? 18 : 0)
         height: pieRow.implicitHeight + (rootRef.s.highlightOptionRect ? 10 : 0)
 
-        scale: pieSectorDelegate.isHovered ? 1.06 : 1.0
-        Behavior on scale { NumberAnimation { duration: 40 } }
+        scale: 1.0 + 0.08 * pieSectorDelegate.hoverProgress
 
         Rectangle {
             anchors.fill: parent
@@ -96,14 +114,14 @@ Item {
             radius: rootRef.s.optionRectRadius !== undefined ? rootRef.s.optionRectRadius : 6
             color: pieSectorDelegate.isHovered
                 ? (rootRef.s.optionRectHoverColor || "#2b5b88")
-                : (rootRef.s.optionRectColor || "#222226")
+                : (rootRef.s.optionRectColor || ((rootRef.s.glass === true || rootRef.s.useGlass === true) ? "#20ffffff" : "#222226"))
             border.color: pieSectorDelegate.isHovered
                 ? (rootRef.s.optionRectHoverBorder || "#3b82f6")
-                : (rootRef.s.optionRectBorder || "#333338")
+                : (rootRef.s.optionRectBorder || ((rootRef.s.glass === true || rootRef.s.useGlass === true) ? "#35ffffff" : "#333338"))
             border.width: 1
 
-            Behavior on color        { ColorAnimation { duration: 40 } }
-            Behavior on border.color { ColorAnimation { duration: 40 } }
+            Behavior on color        { ColorAnimation { duration: 60 } }
+            Behavior on border.color { ColorAnimation { duration: 60 } }
         }
 
         Row {

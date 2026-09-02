@@ -325,15 +325,19 @@ Window {
             let contentRadius = (inR + outR) / 2
 
             for (let i = 0; i < count; ++i) {
-                let itemObj = menuModel.get(i)
+                let pItem = (typeof pieRepeater !== "undefined" && pieRepeater) ? pieRepeater.itemAt(i) : null
                 let isHov = (hovIdx === i)
-                let hProg = isHov ? 1.0 : 0.0
-                let s = isHov ? 1.08 : 1.0
+                let hProg = (pItem && typeof pItem.hoverProgress === "number") ? pItem.hoverProgress : (isHov ? 1.0 : 0.0)
+                let s = 1.0 + (1.08 - 1.0) * hProg
 
                 let startDeg = i * sliceAngleDeg - 90
                 let midRad = (startDeg + sliceAngleDeg / 2) * Math.PI / 180
                 let optX = cx + contentRadius * Math.cos(midRad)
                 let optY = cy + contentRadius * Math.sin(midRad)
+
+                let itemObj = menuModel.get(i)
+                let isSub = itemObj && itemObj.submenuName && itemObj.submenuName !== ""
+                let useSubAccent = isSub && (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
 
                 let labelText = (itemObj && itemObj.label) ? itemObj.label : ""
                 let hasIcon = (itemObj && ((itemObj.iconName && itemObj.iconName !== "") || (itemObj.icon && itemObj.icon !== "")))
@@ -344,16 +348,14 @@ Window {
                 let optH = 36.0 * s
                 let optRad = (root.s.optionRectRadius !== undefined ? root.s.optionRectRadius : 10.0) * s
 
-                let isSub = itemObj && itemObj.submenuName && itemObj.submenuName !== ""
-                let useSubAccent = isSub && (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
-
                 let baseOptCol = (root.s.optionRectColor || (useSubAccent && root.s.pillSubmenuColor ? root.s.pillSubmenuColor : "#25ffffff"))
                 let hovOptCol = (root.s.optionRectHoverColor || (useSubAccent && root.s.submenuAccent ? root.s.submenuAccent : (root.s.accentColor || "#600a84ff")))
                 let baseOptBrd = (root.s.optionRectBorder || (useSubAccent && root.s.pillSubmenuBorder ? root.s.pillSubmenuBorder : "#35ffffff"))
                 let hovOptBrd = (root.s.optionRectHoverBorder || (useSubAccent && root.s.pillSubmenuBorderHover ? root.s.pillSubmenuBorderHover : (root.s.accentColor || "#0a84ff")))
 
-                let optCol = isHov ? hovOptCol : baseOptCol
-                let optBorderCol = isHov ? hovOptBrd : baseOptBrd
+                let optCol = (hProg >= 0.5) ? hovOptCol : baseOptCol
+                let optBorderCol = (hProg >= 0.5) ? hovOptBrd : baseOptBrd
+                let bw = 1.0 + (2.0 - 1.0) * hProg
 
                 pills.push({
                     x: optX,
@@ -367,7 +369,7 @@ Window {
                     specular: spec + (specHover - spec) * hProg,
                     pillColor: optCol,
                     borderColor: optBorderCol,
-                    borderWidth: isHov ? 2.0 : 1.0
+                    borderWidth: bw
                 })
             }
 
@@ -770,18 +772,23 @@ Window {
 
         // ── Pie Wheel Background Disc ──────────────────────────────────────────
         Rectangle {
-            visible: root.isPieMode
+            visible: root.isPieMode && (opacity > 0.0)
             x: menuContainer.centerX - (root.s.outerRadius || 230)
             y: menuContainer.centerY - (root.s.outerRadius || 230)
             width:  (root.s.outerRadius || 230) * 2
             height: width
             radius: width / 2
-            color:  root.s.pieBackgroundColor || "#14141d"
-            opacity: root.s.pieBackgroundOpacity !== undefined ? root.s.pieBackgroundOpacity : 0.95
+            color:  root.s.pieBackgroundColor || ((root.s.glass === true || root.s.useGlass === true) ? "transparent" : "#14141d")
+            opacity: {
+                if (root.s.pieBackgroundOpacity !== undefined) return root.s.pieBackgroundOpacity
+                if (root.s.glass === true || root.s.useGlass === true) return 0.0
+                return 0.95
+            }
         }
 
         // ── MODE 1: Segmented Pie Wheel Sectors ────────────────────────────────
         Repeater {
+            id: pieRepeater
             model: menuModel
             delegate: PieSectorDelegate {}
         }
