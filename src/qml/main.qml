@@ -310,7 +310,7 @@ Window {
                 let startAngle = (i * sliceAngleDeg - 90) * Math.PI / 180 + gapRad
                 let endAngle   = ((i + 1) * sliceAngleDeg - 90) * Math.PI / 180 - gapRad
 
-                let sOuterR = outR + 12.0 * hProg
+                let sOuterR = outR + (root.s.pieHoverExpansion !== undefined ? root.s.pieHoverExpansion : 0.0) * hProg
                 let sBlur = blurRad + (blurHover - blurRad) * hProg
                 let sRefr = refr + (refrHover - refr) * hProg
                 let sChrom = chrom + (chromHover - chrom) * hProg
