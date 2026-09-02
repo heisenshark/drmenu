@@ -24,7 +24,7 @@ Item {
 
     property real innerR: rootRef.s.innerRadius || 65
     property real baseOuterR: rootRef.s.outerRadius || 230
-    property real outerR: baseOuterR + (rootRef.s.pieHoverExpansion !== undefined ? rootRef.s.pieHoverExpansion : 12.0) * hoverProgress
+    property real outerR: baseOuterR + (rootRef.s.pieHoverExpansion !== undefined ? rootRef.s.pieHoverExpansion : 14.0) * hoverProgress
 
     property int hDuration: (rootRef && rootRef.s && (rootRef.s.hoverDuration !== undefined)) ? rootRef.s.hoverDuration : 110
     property real hoverProgress: isHovered ? 1.0 : 0.0
@@ -59,20 +59,19 @@ Item {
     property real contentY: menuContainerRef.centerY + contentRadius * Math.sin(midRad)
 
     property string wedgeSvgPath: {
-        let drawOuterR = outerR - ((!rootRef.s.glass && !rootRef.s.useGlass) ? 1.5 : 0.0)
         let x0 = menuContainerRef.centerX + innerR * Math.cos(startRad)
         let y0 = menuContainerRef.centerY + innerR * Math.sin(startRad)
-        let x1 = menuContainerRef.centerX + drawOuterR * Math.cos(startRad)
-        let y1 = menuContainerRef.centerY + drawOuterR * Math.sin(startRad)
-        let x2 = menuContainerRef.centerX + drawOuterR * Math.cos(endRad)
-        let y2 = menuContainerRef.centerY + drawOuterR * Math.sin(endRad)
+        let x1 = menuContainerRef.centerX + outerR * Math.cos(startRad)
+        let y1 = menuContainerRef.centerY + outerR * Math.sin(startRad)
+        let x2 = menuContainerRef.centerX + outerR * Math.cos(endRad)
+        let y2 = menuContainerRef.centerY + outerR * Math.sin(endRad)
         let x3 = menuContainerRef.centerX + innerR * Math.cos(endRad)
         let y3 = menuContainerRef.centerY + innerR * Math.sin(endRad)
         let largeArc = sliceAngleDeg > 180 ? 1 : 0
 
         return "M " + x0.toFixed(2) + " " + y0.toFixed(2) +
                " L " + x1.toFixed(2) + " " + y1.toFixed(2) +
-               " A " + drawOuterR.toFixed(2) + " " + drawOuterR.toFixed(2) + " 0 " + largeArc + " 1 " + x2.toFixed(2) + " " + y2.toFixed(2) +
+               " A " + outerR.toFixed(2) + " " + outerR.toFixed(2) + " 0 " + largeArc + " 1 " + x2.toFixed(2) + " " + y2.toFixed(2) +
                " L " + x3.toFixed(2) + " " + y3.toFixed(2) +
                " A " + innerR.toFixed(2) + " " + innerR.toFixed(2) + " 0 " + largeArc + " 0 " + x0.toFixed(2) + " " + y0.toFixed(2) +
                " Z"
