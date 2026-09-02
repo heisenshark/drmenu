@@ -121,7 +121,7 @@ Item {
         id: backArrowText
         anchors.centerIn: parent
         anchors.verticalCenterOffset: (rootRef.isPieMode && rootRef.hasParent) ? -12 : 0
-        visible: rootRef.hasParent
+        visible: rootRef.hasParent && menuContainerRef.hoveredIndex === -1
         text: "←"
         font.family: rootRef.s.fontFamily || "Sans"
         font.pixelSize: (rootRef.s.fontSize || 13) + (rootRef.isPieMode ? 6 : 2)
@@ -131,22 +131,15 @@ Item {
         Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
 
         color: {
-            let isCenterHovered = (menuContainerRef.hoveredIndex === -1)
             let isGlass = (rootRef.s.glass === true || rootRef.s.useGlass === true)
             let subAccent = (rootRef.s.showSubmenuAccent !== false) &&
                             (rootRef.s.submenuAccent && rootRef.s.submenuAccent !== "transparent" && rootRef.s.submenuAccent !== "none")
                             ? rootRef.s.submenuAccent : ""
 
             if (isGlass) {
-                if (isCenterHovered) {
-                    return subAccent ? subAccent : "#ffffff"
-                }
-                return subAccent ? subAccent : "#b0ffffff"
+                return subAccent ? subAccent : "#ffffff"
             }
-            if (isCenterHovered) {
-                return subAccent ? subAccent : "#60a5fa"
-            }
-            return subAccent ? subAccent : "#93c5fd"
+            return subAccent ? subAccent : "#60a5fa"
         }
 
         Behavior on color { ColorAnimation { duration: 60 } }
@@ -154,7 +147,7 @@ Item {
 
     Rectangle {
         anchors.centerIn: parent
-        visible: !rootRef.hasParent
+        visible: !(rootRef.hasParent && menuContainerRef.hoveredIndex === -1)
         width:  menuContainerRef.hoveredIndex !== -1 ? 7 : 4
         height: width
         radius: width / 2
