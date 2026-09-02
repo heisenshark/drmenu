@@ -12,18 +12,163 @@
 #include <QTextStream>
 
 QString ConfigLoader::defaultConfigPath() {
+    QString jsoncPath = QDir::homePath() + "/.config/drmenu/config.jsonc";
+    if (QFile::exists(jsoncPath))
+        return jsoncPath;
     return QDir::homePath() + "/.config/drmenu/config.json";
 }
 
+static QByteArray cleanJsonc(const QByteArray &raw) {
+    // Pass 1: Strip single-line (//) and multi-line (/* */) comments outside strings
+    QByteArray noComments;
+    noComments.reserve(raw.size());
+    bool inString = false;
+    bool inLineComment = false;
+    bool inBlockComment = false;
+    bool escaped = false;
+
+    for (int i = 0; i < raw.size(); ++i) {
+        char c = raw[i];
+        char next = (i + 1 < raw.size()) ? raw[i + 1] : '\0';
+
+        if (inLineComment) {
+            if (c == '\n') {
+                inLineComment = false;
+                noComments.append('\n');
+            } else {
+                noComments.append(' ');
+            }
+            continue;
+        }
+
+        if (inBlockComment) {
+            if (c == '*' && next == '/') {
+                inBlockComment = false;
+                noComments.append("  ");
+                ++i;
+            } else if (c == '\n') {
+                noComments.append('\n');
+            } else {
+                noComments.append(' ');
+            }
+            continue;
+        }
+
+        if (inString) {
+            noComments.append(c);
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (c == '"') {
+            inString = true;
+            escaped = false;
+            noComments.append(c);
+        } else if (c == '/' && next == '/') {
+            inLineComment = true;
+            noComments.append("  ");
+            ++i;
+        } else if (c == '/' && next == '*') {
+            inBlockComment = true;
+            noComments.append("  ");
+            ++i;
+        } else {
+            noComments.append(c);
+        }
+    }
+
+    // Pass 2: Clean up leading, trailing, and redundant commas outside strings
+    QByteArray clean;
+    clean.reserve(noComments.size());
+    inString = false;
+    escaped = false;
+    int len = noComments.size();
+
+    auto lastNonWhitespace = [&clean]() -> char {
+        for (int j = clean.size() - 1; j >= 0; --j) {
+            char ch = clean[j];
+            if (ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r')
+                return ch;
+        }
+        return '\0';
+    };
+
+    auto nextNonWhitespace = [&noComments, len](int start) -> char {
+        for (int j = start; j < len; ++j) {
+            char ch = noComments[j];
+            if (ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r')
+                return ch;
+        }
+        return '\0';
+    };
+
+    for (int i = 0; i < len; ++i) {
+        char c = noComments[i];
+
+        if (inString) {
+            clean.append(c);
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (c == '"') {
+            inString = true;
+            escaped = false;
+            clean.append(c);
+            continue;
+        }
+
+        if (c == ',') {
+            char prevChar = lastNonWhitespace();
+            char nextChar = nextNonWhitespace(i + 1);
+
+            // Leading comma right after '{' or '[' or duplicate comma
+            if (prevChar == '{' || prevChar == '[' || prevChar == ',') {
+                clean.append(' ');
+                continue;
+            }
+            // Trailing comma right before '}' or ']'
+            if (nextChar == '}' || nextChar == ']' || nextChar == ',') {
+                clean.append(' ');
+                continue;
+            }
+        }
+
+        clean.append(c);
+    }
+
+    return clean;
+}
+
 static QJsonObject loadRoot(const QString &configPath) {
-    QString path = configPath.isEmpty() ? ConfigLoader::defaultConfigPath() : configPath;
+    QString path = configPath;
+    if (path.isEmpty()) {
+        path = ConfigLoader::defaultConfigPath();
+    } else {
+        if (!QFile::exists(path) && path.endsWith(".json") && QFile::exists(path + "c")) {
+            path += "c";
+        }
+    }
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         QTextStream(stderr) << "drmenu: cannot open config: " << path << "\n";
         return {};
     }
     QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
+    QByteArray cleaned = cleanJsonc(file.readAll());
+    QJsonDocument doc = QJsonDocument::fromJson(cleaned, &err);
     if (err.error != QJsonParseError::NoError) {
         QTextStream(stderr) << "drmenu: JSON parse error in " << path
                             << ": " << err.errorString() << "\n";
