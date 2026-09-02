@@ -168,7 +168,7 @@ void HyprlandGlassShader::activate(int screenWidth, int screenHeight,
         float py = p.y - p.halfHeight;
         float pw = p.halfWidth * 2.0f;
         float ph = p.halfHeight * 2.0f;
-        float rad = p.radius > 0.0f ? p.radius : 18.0f;
+        float rad = (p.radius >= 0.0f) ? p.radius : 18.0f;
         float blur = (p.blur >= 0.0f) ? p.blur : ((blurRadius >= 0.0f) ? blurRadius : 24.0f);
         float refr = (p.refraction >= 0.0f) ? p.refraction : ((refraction >= 0.0f) ? refraction : 0.85f);
         float chrom = (p.chromatic >= 0.0f) ? p.chromatic : ((chromaticAberration >= 0.0f) ? chromaticAberration : 1.4f);

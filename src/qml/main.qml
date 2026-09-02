@@ -294,7 +294,9 @@ Window {
         let cy = menuContainer.centerY
         let rDist = root.s.radiusDistance || 185
         let pHalfH = (root.s.pillHeight || 42) / 2
-        let pRad = root.s.pillRadius !== undefined ? root.s.pillRadius : pHalfH
+        let pRad = (root.s.pillRadius !== undefined) ? root.s.pillRadius
+                 : ((root.s.shape === "rectangle") ? 0
+                 : ((root.s.shape === "rounded") ? 8 : pHalfH))
 
         let hasLiveItems = (typeof pillRepeater !== "undefined" && pillRepeater && pillRepeater.count === count)
         if (hasLiveItems) {
