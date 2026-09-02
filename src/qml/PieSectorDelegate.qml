@@ -161,11 +161,22 @@ Item {
                          : (pieSectorDelegate.isSubmenu ? "☰" : pieSectorDelegate.label.charAt(0).toUpperCase())
                 font.family:    rootRef.s.fontFamily || "Sans"
                 font.pixelSize: (rootRef.s.fontSize || 13)
-                color: pieSectorDelegate.isHovered
-                       ? (pieSectorDelegate.isSubmenu
-                           ? (rootRef.s.submenuAccent || "#c084fc")
-                           : ((rootRef.s.iconHoverColor && rootRef.s.iconHoverColor !== "transparent") ? rootRef.s.iconHoverColor : "#f39c12"))
-                       : ((rootRef.s.iconColor && rootRef.s.iconColor !== "transparent") ? rootRef.s.iconColor : "#a0a0b0")
+                color: {
+                    let useSub = (rootRef.s.showSubmenuAccent !== false) &&
+                                 (rootRef.s.useSubmenuAccent !== false) &&
+                                 (rootRef.s.submenuAccent !== "transparent") &&
+                                 (rootRef.s.submenuAccent !== "none") &&
+                                 rootRef.s.submenuAccent
+                    if (pieSectorDelegate.isHovered) {
+                        if (pieSectorDelegate.isSubmenu && useSub) return rootRef.s.submenuAccent
+                        if (rootRef.s.iconHoverColor && rootRef.s.iconHoverColor !== "transparent") return rootRef.s.iconHoverColor
+                        if (rootRef.s.textHoverColor && rootRef.s.textHoverColor !== "transparent") return rootRef.s.textHoverColor
+                        return "#ffffff"
+                    }
+                    if (pieSectorDelegate.isSubmenu && useSub && rootRef.s.submenuIconColor) return rootRef.s.submenuIconColor
+                    if (rootRef.s.iconColor && rootRef.s.iconColor !== "transparent") return rootRef.s.iconColor
+                    return "#a0a0b0"
+                }
                 anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -181,10 +192,23 @@ Item {
             }
 
             Text {
-                visible: pieSectorDelegate.isSubmenu
+                visible: pieSectorDelegate.isSubmenu && (rootRef.s.showSubmenuIndicator !== false)
                 text: "▶"
                 font.pixelSize: 9
-                color: pieSectorDelegate.isHovered ? (rootRef.s.submenuAccent || "#c084fc") : "#605075"
+                color: {
+                    let useSub = (rootRef.s.showSubmenuAccent !== false) &&
+                                 (rootRef.s.useSubmenuAccent !== false) &&
+                                 (rootRef.s.submenuAccent !== "transparent") &&
+                                 (rootRef.s.submenuAccent !== "none") &&
+                                 rootRef.s.submenuAccent
+                    if (pieSectorDelegate.isHovered) {
+                        if (useSub) return rootRef.s.submenuAccent
+                        if (rootRef.s.textHoverColor && rootRef.s.textHoverColor !== "transparent") return rootRef.s.textHoverColor
+                        return "#ffffff"
+                    }
+                    if (useSub && rootRef.s.pillSubmenuBorder && rootRef.s.pillSubmenuBorder !== "transparent") return rootRef.s.pillSubmenuBorder
+                    return "#808095"
+                }
                 anchors.verticalCenter: parent.verticalCenter
             }
         }
