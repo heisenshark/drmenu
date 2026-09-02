@@ -35,34 +35,42 @@ For environments without the Hyprland plugin or for minimal flat aesthetics:
 | `dracula` | `pills` | High-contrast purple and pink theme. |
 | `gruvbox-dark` | `pills` | Retro groove warm dark brown/amber palette. |
 | `monochrome` | `pills` | High-contrast black and white styling. |
+| `user-glass` | `pills` | Ultra-minimal dark liquid glass with transparent borders and vibrant hover optics. |
 
 ---
 
-## 🛠️ Creating Custom Themes
+## 🛠️ Defining Custom Themes (`"themes"`)
 
-To create a custom style, specify properties in `~/.config/drmenu/config.json`:
+You can define your own named custom themes in `~/.config/drmenu/config.json` under the `"themes"` object, and reference them globally or per-menu:
 
 ```json
 {
-  "theme": "liquid-glass",
-  "blur": 30.0,
-  "blurHover": 45.0,
-  "refractionStrength": 1.0,
-  "refractionHover": 1.35,
-  "chromaticAberration": 1.8,
-  "chromaticHover": 2.5,
-  "specularStrength": 0.85,
-  "specularHover": 1.20,
-  "pillRadius": 22,
-  "pillHeight": 44,
-  "pillColor": "#20101018",
-  "pillHoverColor": "#40202030",
-  "pillBorderColor": "#40ffffff",
-  "pillBorderHoverColor": "#b0ffffff",
-  "borderWidth": 1.0,
-  "borderHoverWidth": 2.0,
-  "showSubmenuAccent": false,
-  "fontFamily": "Inter, Sans",
-  "fontSize": 13
+  "theme": "user-glass",
+  "themes": {
+    "user-glass": {
+      "base": "liquid-glass",
+      "glass": true,
+      "blur": 1.5,
+      "blurHover": 48.0,
+      "refractionStrength": 0.30,
+      "refractionHover": 0.60,
+      "chromaticAberration": 0.5,
+      "chromaticHover": 2.0,
+      "specularStrength": 0.01,
+      "specularHover": 0.35,
+      "pillRadius": 22,
+      "pillHeight": 44,
+      "radiusDistance": 200,
+      "pillColor": "#0f000000",
+      "pillHoverColor": "transparent",
+      "pillBorderColor": "transparent",
+      "pillBorderHoverColor": "transparent",
+      "accentColor": "transparent",
+      "backgroundColor": "transparent",
+      "backgroundOpacity": 0.0,
+      "hoverDuration": 200,
+      "showSubmenuAccent": false
+    }
+  }
 }
 ```

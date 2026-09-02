@@ -23,6 +23,7 @@ QStringList ThemeManager::availableThemes() {
         "visionos-lens",
         "liquid-glass",
         "liquid-glass-light",
+        "user-glass",
         "monochrome",
         "light"
     };
@@ -738,6 +739,50 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         style["pillRadius"]           = 18;
         style["borderWidth"]          = 1;
         style["borderHoverWidth"]     = 2;
+        style["showGuideRing"]        = false;
+        style["showPointerLine"]      = false;
+    } else if (name == "user-glass" || name == "user_glass" || name == "user") {
+        style["glass"]                = true;
+        style["useGlass"]             = true;
+        style["blur"]                 = 1.5;
+        style["blurStrength"]         = 1.5;
+        style["blurHover"]            = 48.0;
+        style["refractionStrength"]   = 0.30;
+        style["refractionHover"]      = 0.60;
+        style["chromaticAberration"]  = 0.5;
+        style["chromaticHover"]       = 2.0;
+        style["specularStrength"]     = 0.01;
+        style["specularHover"]        = 0.35;
+        style["backgroundColor"]      = "transparent";
+        style["backgroundOpacity"]    = 0.0;
+        style["pillColor"]            = "#0f000000";
+        style["pillHoverColor"]       = "transparent";
+        style["pillBorderColor"]      = "transparent";
+        style["pillBorderHoverColor"] = "transparent";
+        style["pillSubmenuColor"]     = "#0f000000";
+        style["pillSubmenuHoverColor"]= "transparent";
+        style["pillSubmenuBorder"]    = "transparent";
+        style["pillSubmenuBorderHover"] = "transparent";
+        style["textColor"]            = "#f5f5f7";
+        style["textHoverColor"]       = "#ffffff";
+        style["accentColor"]          = "transparent";
+        style["iconColor"]            = "#ebebf5";
+        style["iconHoverColor"]       = "#ffffff";
+        style["submenuAccent"]        = "transparent";
+        style["showSubmenuAccent"]    = false;
+        style["centerColor"]          = "transparent";
+        style["centerBorder"]         = "transparent";
+        style["centerBorderHover"]    = "transparent";
+        style["centerDotColor"]       = "#60ffffff";
+        style["centerDotHoverColor"]  = "#a0ffffff";
+        style["fontFamily"]           = "SF Pro Display, -apple-system, Inter, Cantarell, Sans";
+        style["fontSize"]             = 13;
+        style["pillHeight"]           = 44;
+        style["pillRadius"]           = 22;
+        style["radiusDistance"]       = 200;
+        style["borderWidth"]          = 0;
+        style["borderHoverWidth"]     = 0;
+        style["hoverDuration"]        = 200;
         style["showGuideRing"]        = false;
         style["showPointerLine"]      = false;
     } else if (name == "monochrome") {
