@@ -967,6 +967,53 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
             style["fontFamily"]  = val;
             style["font_family"] = val;
         }
+        if (key == "pie_slice_color" || key == "pieSliceColor") {
+            style["pieSliceColor"] = val;
+            style["pie_slice_color"] = val;
+        }
+        if (key == "pie_slice_hover_color" || key == "pieSliceHoverColor") {
+            style["pieSliceHoverColor"] = val;
+            style["pie_slice_hover_color"] = val;
+        }
+        if (key == "pie_background_color" || key == "pieBackgroundColor") {
+            style["pieBackgroundColor"] = val;
+            style["pie_background_color"] = val;
+        }
+        if (key == "pie_background_opacity" || key == "pieBackgroundOpacity") {
+            style["pieBackgroundOpacity"] = val;
+            style["pie_background_opacity"] = val;
+        }
+        if (key == "pie_outer_border_color" || key == "pieOuterBorderColor") {
+            style["pieOuterBorderColor"] = val;
+            style["pie_outer_border_color"] = val;
+        }
+        if (key == "pie_outer_border_width" || key == "pieOuterBorderWidth") {
+            style["pieOuterBorderWidth"] = val;
+            style["pie_outer_border_width"] = val;
+        }
+        if (key == "delimiter_color" || key == "delimiterColor") {
+            style["delimiterColor"] = val;
+            style["delimiter_color"] = val;
+        }
+        if (key == "delimiter_width" || key == "delimiterWidth") {
+            style["delimiterWidth"] = val;
+            style["delimiter_width"] = val;
+        }
+    }
+
+    if (style["glass"] == true || style["useGlass"] == true) {
+        if (!style.contains("pieBackgroundColor")) style["pieBackgroundColor"] = "transparent";
+        if (!style.contains("pieBackgroundOpacity")) style["pieBackgroundOpacity"] = 0.0;
+        if (!style.contains("pieSliceColor")) style["pieSliceColor"] = "#18ffffff";
+        if (!style.contains("pieSliceHoverColor")) style["pieSliceHoverColor"] = "#45ffffff";
+        if (!style.contains("pieOuterBorderColor")) style["pieOuterBorderColor"] = "#40ffffff";
+        if (!style.contains("pieOuterBorderWidth")) style["pieOuterBorderWidth"] = 1;
+        if (!style.contains("delimiterColor")) style["delimiterColor"] = "#30ffffff";
+        if (!style.contains("delimiterWidth")) style["delimiterWidth"] = 1;
+        if (!style.contains("optionRectColor")) style["optionRectColor"] = "#25ffffff";
+        if (!style.contains("optionRectHoverColor")) style["optionRectHoverColor"] = "#600a84ff";
+        if (!style.contains("optionRectBorder")) style["optionRectBorder"] = "#35ffffff";
+        if (!style.contains("optionRectHoverBorder")) style["optionRectHoverBorder"] = "#0a84ff";
     }
 
     return style;

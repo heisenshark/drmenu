@@ -63,14 +63,14 @@ Item {
         height: menuContainerRef.height
 
         ShapePath {
-            strokeWidth: (rootRef.s.delimiterWidth === 0) ? 0 : (pieSectorDelegate.isHovered ? 3 : (rootRef.s.delimiterWidth !== undefined ? rootRef.s.delimiterWidth : 2))
+            strokeWidth: (rootRef.s.delimiterWidth === 0) ? 0 : (pieSectorDelegate.isHovered ? 2 : (rootRef.s.delimiterWidth !== undefined ? rootRef.s.delimiterWidth : ((rootRef.s.glass === true || rootRef.s.useGlass === true) ? 1 : 2)))
             strokeColor: (rootRef.s.delimiterWidth === 0) ? "transparent" : (pieSectorDelegate.isHovered
-                ? (rootRef.s.accentColor || "#e67e22")
-                : (rootRef.s.delimiterColor || "#383848"))
+                ? (rootRef.s.accentColor || "#0a84ff")
+                : (rootRef.s.delimiterColor || ((rootRef.s.glass === true || rootRef.s.useGlass === true) ? "#30ffffff" : "#383848")))
 
             fillColor: pieSectorDelegate.isHovered
-                ? (rootRef.s.pieSliceHoverColor || "#323246")
-                : (rootRef.s.pieSliceColor || "#1e1e2a")
+                ? (rootRef.s.pieSliceHoverColor !== undefined ? rootRef.s.pieSliceHoverColor : ((rootRef.s.glass === true || rootRef.s.useGlass === true) ? "#35ffffff" : "#323246"))
+                : (rootRef.s.pieSliceColor !== undefined ? rootRef.s.pieSliceColor : ((rootRef.s.glass === true || rootRef.s.useGlass === true) ? "transparent" : "#1e1e2a"))
 
             Behavior on fillColor { ColorAnimation { duration: 40 } }
 
