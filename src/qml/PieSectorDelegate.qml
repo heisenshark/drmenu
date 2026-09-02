@@ -24,7 +24,7 @@ Item {
 
     property real innerR: rootRef.s.innerRadius || 65
     property real baseOuterR: rootRef.s.outerRadius || 230
-    property real outerR: baseOuterR + (rootRef.s.pieHoverExpansion !== undefined ? rootRef.s.pieHoverExpansion : 0.0) * hoverProgress
+    property real outerR: baseOuterR + (rootRef.s.pieHoverExpansion !== undefined ? rootRef.s.pieHoverExpansion : 14.0) * hoverProgress
 
     property int hDuration: (rootRef && rootRef.s && (rootRef.s.hoverDuration !== undefined)) ? rootRef.s.hoverDuration : 110
     property real hoverProgress: isHovered ? 1.0 : 0.0
