@@ -794,12 +794,16 @@ Window {
         Text {
             visible: (root.s.showBreadcrumbs !== false) && root.menuStack.length > 0
             x: menuContainer.centerX - width / 2
-            y: menuContainer.centerY + (root.isPieMode ? (root.s.innerRadius || 65) : (root.s.centerRadius || 15)) + 10
+            y: root.isPieMode
+                ? (menuContainer.centerY - height / 2 + (root.hasParent ? 14 : 0))
+                : (menuContainer.centerY + (root.s.centerRadius || 15) + 10)
             text: root.menuStack.join(" › ")
             font.family: root.s.fontFamily || "Sans"
-            font.pixelSize: Math.max(9, (root.s.fontSize || 13) - 3)
-            color: root.s.breadcrumbColor || "#606070"
+            font.pixelSize: Math.max(9, (root.s.fontSize || 13) - (root.isPieMode ? 1 : 3))
+            font.bold: root.isPieMode
+            color: root.s.breadcrumbColor || (root.isPieMode ? "#c0c0d0" : "#606070")
             font.letterSpacing: 0.5
+            z: 20
         }
     }
 }

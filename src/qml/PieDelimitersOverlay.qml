@@ -32,8 +32,6 @@ Item {
         model: menuContainerRef.itemCount
         delegate: Shape {
             anchors.fill: parent
-            layer.enabled: true
-            layer.samples: 4
 
             property real count: menuContainerRef.itemCount
             property real sliceAngleDeg: 360 / count
@@ -51,7 +49,7 @@ Item {
                     ? (rootRef.s.pieOuterBorderHoverWidth || (pieDelimitersOverlay.dWidth + 1))
                     : (rootRef.s.pieOuterBorderWidth !== undefined ? rootRef.s.pieOuterBorderWidth : pieDelimitersOverlay.dWidth)
                 strokeColor: isHov
-                    ? (rootRef.s.accentColor || rootRef.s.pieOuterBorderHoverColor || "#0a84ff")
+                    ? ((rootRef.s.accentColor && rootRef.s.accentColor !== "transparent") ? rootRef.s.accentColor : (rootRef.s.pieOuterBorderHoverColor || "#0a84ff"))
                     : (rootRef.s.pieOuterBorderColor || pieDelimitersOverlay.dColor)
                 fillColor: "transparent"
 
@@ -76,8 +74,6 @@ Item {
         model: menuContainerRef.itemCount
         delegate: Shape {
             anchors.fill: parent
-            layer.enabled: true
-            layer.samples: 4
 
             property real count: menuContainerRef.itemCount
             property real sliceAngleDeg: 360 / count

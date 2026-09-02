@@ -101,10 +101,12 @@ Item {
 
     // Sector Content (Icon + Label centered in wedge)
     Item {
+        id: sectorContentItem
         x: pieSectorDelegate.contentX - width / 2
         y: pieSectorDelegate.contentY - height / 2
         width: pieRow.implicitWidth + (rootRef.s.highlightOptionRect ? 18 : 0)
         height: pieRow.implicitHeight + (rootRef.s.highlightOptionRect ? 10 : 0)
+        z: 15
 
         scale: 1.0 + 0.08 * pieSectorDelegate.hoverProgress
 
@@ -138,8 +140,8 @@ Item {
                 font.pixelSize: Math.max(9, (rootRef.s.fontSize || 13) - 3)
                 font.bold: true
                 color: pieSectorDelegate.isHovered
-                       ? (rootRef.s.accentColor || "#3b82f6")
-                       : (rootRef.s.numberBadgeColor || "#686878")
+                       ? ((rootRef.s.accentColor && rootRef.s.accentColor !== "transparent") ? rootRef.s.accentColor : (rootRef.s.numberBadgeHoverColor || "#3b82f6"))
+                       : (rootRef.s.numberBadgeColor || "#808090")
                 anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -160,8 +162,10 @@ Item {
                 font.family:    rootRef.s.fontFamily || "Sans"
                 font.pixelSize: (rootRef.s.fontSize || 13)
                 color: pieSectorDelegate.isHovered
-                       ? (pieSectorDelegate.isSubmenu ? (rootRef.s.submenuAccent || "#c084fc") : (rootRef.s.iconHoverColor || "#f39c12"))
-                       : (rootRef.s.iconColor || "#a0a0b0")
+                       ? (pieSectorDelegate.isSubmenu
+                           ? (rootRef.s.submenuAccent || "#c084fc")
+                           : ((rootRef.s.iconHoverColor && rootRef.s.iconHoverColor !== "transparent") ? rootRef.s.iconHoverColor : "#f39c12"))
+                       : ((rootRef.s.iconColor && rootRef.s.iconColor !== "transparent") ? rootRef.s.iconColor : "#a0a0b0")
                 anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -169,8 +173,10 @@ Item {
                 text: pieSectorDelegate.label
                 font.family: rootRef.s.fontFamily || "Sans"
                 font.pixelSize: rootRef.s.fontSize || 13
-                font.bold: pieSectorDelegate.isHovered
-                color: pieSectorDelegate.isHovered ? (rootRef.s.textHoverColor || "#ffffff") : (rootRef.s.textColor || "#d0d0d8")
+                font.bold: true
+                color: pieSectorDelegate.isHovered
+                       ? ((rootRef.s.textHoverColor && rootRef.s.textHoverColor !== "transparent") ? rootRef.s.textHoverColor : "#ffffff")
+                       : ((rootRef.s.textColor && rootRef.s.textColor !== "transparent") ? rootRef.s.textColor : "#d0d0d8")
                 anchors.verticalCenter: parent.verticalCenter
             }
 
