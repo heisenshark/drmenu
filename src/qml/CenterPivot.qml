@@ -14,7 +14,7 @@ Item {
     y: menuContainerRef.centerY - height / 2
     width:  torusRadius * 2
     height: torusRadius * 2
-    z: 10
+    z: 25
 
     // ── Mode A: Solid Circle Center Pivot (Standard Pie Theme) ────────────────
     Rectangle {
@@ -27,7 +27,7 @@ Item {
             : (menuContainerRef.hoveredIndex !== -1
                 ? (rootRef.s.centerBorderHoverColor || rootRef.s.centerBorderHover || "#e67e22")
                 : (rootRef.hasParent
-                    ? (rootRef.s.submenuAccent || "#c084fc")
+                    ? ((rootRef.s.submenuAccent && rootRef.s.submenuAccent !== "transparent") ? rootRef.s.submenuAccent : "#c084fc")
                     : (rootRef.s.centerBorderColor || rootRef.s.centerBorder || "#5a5a72")))
         border.width: rootRef.s.centerBorderWidth !== undefined ? rootRef.s.centerBorderWidth : 3
 
@@ -118,17 +118,43 @@ Item {
 
     // ── Center Hole Indicators (Dot / Back Arrow) ────────────────────────────
     Text {
+        id: backArrowText
         anchors.centerIn: parent
-        visible: rootRef.hasParent && menuContainerRef.hoveredIndex === -1
+        anchors.verticalCenterOffset: (rootRef.isPieMode && rootRef.hasParent) ? -12 : 0
+        visible: rootRef.hasParent
         text: "←"
         font.family: rootRef.s.fontFamily || "Sans"
-        font.pixelSize: (rootRef.s.fontSize || 13) + 2
-        color: rootRef.s.submenuAccent || "#60a5fa"
+        font.pixelSize: (rootRef.s.fontSize || 13) + (rootRef.isPieMode ? 6 : 2)
+        font.bold: true
+        scale: (menuContainerRef.hoveredIndex === -1) ? 1.25 : 1.0
+
+        Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
+
+        color: {
+            let isCenterHovered = (menuContainerRef.hoveredIndex === -1)
+            let isGlass = (rootRef.s.glass === true || rootRef.s.useGlass === true)
+            let subAccent = (rootRef.s.showSubmenuAccent !== false) &&
+                            (rootRef.s.submenuAccent && rootRef.s.submenuAccent !== "transparent" && rootRef.s.submenuAccent !== "none")
+                            ? rootRef.s.submenuAccent : ""
+
+            if (isGlass) {
+                if (isCenterHovered) {
+                    return subAccent ? subAccent : "#ffffff"
+                }
+                return subAccent ? subAccent : "#b0ffffff"
+            }
+            if (isCenterHovered) {
+                return subAccent ? subAccent : "#60a5fa"
+            }
+            return subAccent ? subAccent : "#93c5fd"
+        }
+
+        Behavior on color { ColorAnimation { duration: 60 } }
     }
 
     Rectangle {
         anchors.centerIn: parent
-        visible: !(rootRef.hasParent && menuContainerRef.hoveredIndex === -1)
+        visible: !rootRef.hasParent
         width:  menuContainerRef.hoveredIndex !== -1 ? 7 : 4
         height: width
         radius: width / 2
@@ -140,7 +166,7 @@ Item {
             }
             return menuContainerRef.hoveredIndex !== -1
                 ? (rootRef.s.centerDotHoverColor || "#3b82f6")
-                : (rootRef.s.centerDotColor || "#808080")
+                : (rootRef.s.centerDotColor || "#808090")
         }
 
         Behavior on width { NumberAnimation { duration: 40 } }

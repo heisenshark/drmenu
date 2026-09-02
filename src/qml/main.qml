@@ -369,7 +369,7 @@ Window {
                 pillColor: (root.s.centerColor !== undefined) ? root.s.centerColor : "transparent",
                 borderColor: (cHProg < 0.5 && menuContainer.hoveredIndex !== -1)
                     ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || "transparent")
-                    : (root.hasParent ? (root.s.submenuAccent || "#80bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || root.s.centerTorusColor || "#40ffffff")),
+                    : (root.hasParent ? ((root.s.submenuAccent && root.s.submenuAccent !== "transparent") ? root.s.submenuAccent : "#80bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || root.s.centerTorusColor || "#40ffffff")),
                 borderWidth: cBW,
                 shapeType: 0
             })
@@ -500,7 +500,7 @@ Window {
             pillColor: (root.s.centerColor !== undefined) ? root.s.centerColor : "transparent",
             borderColor: (cHProg < 0.5 && menuContainer.hoveredIndex !== -1)
                 ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || "transparent")
-                : (root.hasParent ? (root.s.submenuAccent || "#80bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || "#40ffffff")),
+                : (root.hasParent ? ((root.s.submenuAccent && root.s.submenuAccent !== "transparent") ? root.s.submenuAccent : "#80bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || "#40ffffff")),
             borderWidth: cBW
         })
 
