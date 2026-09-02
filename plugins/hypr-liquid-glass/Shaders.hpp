@@ -67,10 +67,12 @@ float sdPieWedge(vec2 p, float startAngle, float endAngle, float rIn, float rOut
     float dRadial = max(r - rOut, rIn - r);
     float dSpoke = dot(pr, spokeNorm);
 
+    // If point is inside the angular sector (dSpoke <= 0)
     if (dSpoke <= 0.0) {
-        return dRadial - cornerRad;
+        return max(dRadial, dSpoke) - cornerRad;
     }
 
+    // If point is outside the angular sector (dSpoke > 0)
     float t = clamp(dot(pr, cs), rIn, rOut);
     vec2 closestPt = cs * t;
     return length(pr - closestPt) - cornerRad;
@@ -225,11 +227,16 @@ void main() {
 
     // 5. Physical Fresnel Specular Rim (Top rim catchlight + subtle grazing Fresnel)
     if (u_specular_strength > 0.001) {
-        // Crisp 1.5px top-edge light catch
-        float topRim = smoothstep(1.8, 0.0, abs(p.y + halfSize.y)) * smoothstep(0.0, 3.0, halfSize.x - abs(p.x));
+        float topRim = 0.0;
+        if (u_shape_type == 1) {
+            float lightDot = max(0.0, -normal.y);
+            topRim = pow(lightDot, 2.0) * pow(1.0 - edgeFactor, 1.5) * 0.70;
+        } else {
+            topRim = smoothstep(1.8, 0.0, abs(p.y + halfSize.y)) * smoothstep(0.0, 3.0, halfSize.x - abs(p.x)) * 0.55;
+        }
         // Grazing-angle edge Fresnel rim (confined strictly to the outer border)
         float edgeFresnel = pow(1.0 - edgeFactor, 3.0) * 0.35;
-        float specHighlight = (topRim * 0.55 + edgeFresnel) * u_specular_strength;
+        float specHighlight = (topRim + edgeFresnel) * u_specular_strength;
         col += vec3(1.0, 0.98, 0.95) * specHighlight;
     }
 
