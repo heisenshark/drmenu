@@ -69,6 +69,9 @@ void main() {
     // Exact hardware screen pixel from rasterizer
     vec2 screenUV = gl_FragCoord.xy / u_resolution;
 
+    // True geometric SDF normal vector (points outward from pill perimeter)
+    vec2 normal = getSDFNormal(p, halfSize, u_corner_radius);
+
     // Convex lens curvature profile: maximum refraction at outer rim, smoothly zero at center
     float edgeDist = max(0.0, -dist);
     // Bevel curvature depth: uses corner radius for round pills, or a physical bevel margin (14px) for squared rectangles
