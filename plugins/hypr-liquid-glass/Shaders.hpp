@@ -69,21 +69,21 @@ void main() {
     // Exact hardware screen pixel from rasterizer
     vec2 screenUV = gl_FragCoord.xy / u_resolution;
 
-    // True geometric SDF normal vector (smooth C1 continuity at corners to eliminate diagonal miter creases)
-    vec2 normal = getSDFNormal(p, halfSize, max(4.0, u_corner_radius));
+    // Geometric SDF normal vector
+    vec2 normal = getSDFNormal(p, halfSize, max(1.0, u_corner_radius));
 
-    // Convex lens curvature profile: maximum refraction at outer rim, smoothly zero at center
+    // Optical edge profile: full curvature for round pills, sleek 2.5px micro-bevel for rectangles
     float edgeDist = max(0.0, -dist);
-    float bevelDepth = (u_corner_radius >= 12.0) ? u_corner_radius : min(halfSize.y * 0.65, max(6.0, u_corner_radius));
-    float edgeFactor = clamp(edgeDist / bevelDepth, 0.0, 1.0);
+    float bevelMargin = (u_corner_radius >= 12.0) ? u_corner_radius : max(2.5, u_corner_radius);
+    float edgeFactor = clamp(edgeDist / bevelMargin, 0.0, 1.0);
     float lensSlope = sin((1.0 - edgeFactor) * 1.57079632679);
 
-    // Refraction vector (bends texture coordinate in screen space along true normal)
+    // Refraction vector (bends texture coordinate in screen space along normal)
     vec2 refr = normal * (lensSlope * u_refraction_strength * 14.0) / u_resolution;
     vec2 refrUV = screenUV - refr;
 
     // Chromatic dispersion offsets along true normal (vivid physical prism split)
-    vec2 chromOffset = normal * (u_chromatic_aberration * 4.5 * lensSlope) / u_resolution;
+    vec2 chromOffset = normal * (u_chromatic_aberration * 4.0 * lensSlope) / u_resolution;
 
     vec3 col = vec3(0.0);
 
@@ -173,22 +173,24 @@ void main() {
         col *= mix(0.72, 1.0, edgeDarkening * (1.0 - adaptFactor * 0.45));
     }
 
-    // 3. Inner Edge Ambient Occlusion (subtle internal depth at glass perimeter)
-    float innerAO = smoothstep(0.0, 3.5, edgeDist);
-    col *= mix(0.93, 1.0, innerAO);
+    // 3. Inner Edge Ambient Occlusion (subtle internal depth on round pills)
+    if (u_corner_radius >= 12.0) {
+        float innerAO = smoothstep(0.0, 3.0, edgeDist);
+        col *= mix(0.94, 1.0, innerAO);
+    }
 
     // 4. Substrate Material Tint (Frosted milk / acrylic pigment)
     if (u_milky_tint.a > 0.0) {
         col = mix(col, u_milky_tint.rgb, u_milky_tint.a);
     }
 
-    // 5. Fresnel Surface Specular Sheen (Continuous surface gloss + top rim highlight)
+    // 5. Physical Fresnel Specular Rim (Top rim catchlight + subtle grazing Fresnel)
     if (u_specular_strength > 0.001) {
-        vec2 lightDir = normalize(vec2(-0.35, -0.93));
-        float nDotL = max(0.0, dot(normal, -lightDir));
-        float topSheen = pow(clamp(0.5 - p.y / (halfSize.y * 2.0), 0.0, 1.0), 1.6);
-        float rimBevel = smoothstep(3.5, 0.0, edgeDist);
-        float specHighlight = (topSheen * 0.40 + nDotL * rimBevel * 0.70) * u_specular_strength;
+        // Crisp 1.5px top-edge light catch
+        float topRim = smoothstep(1.8, 0.0, abs(p.y + halfSize.y)) * smoothstep(0.0, 3.0, halfSize.x - abs(p.x));
+        // Grazing-angle edge Fresnel rim (confined strictly to the outer border)
+        float edgeFresnel = pow(1.0 - edgeFactor, 3.0) * 0.35;
+        float specHighlight = (topRim * 0.55 + edgeFresnel) * u_specular_strength;
         col += vec3(1.0, 0.98, 0.95) * specHighlight;
     }
 
