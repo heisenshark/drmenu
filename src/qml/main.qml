@@ -296,14 +296,32 @@ Window {
         if (root.isPieMode) {
             let outR = root.s.outerRadius || 230
             let inR = root.s.innerRadius || 65
-            let isAnyHov = (menuContainer.hoveredIndex !== -1)
             let hovIdx = menuContainer.hoveredIndex
-            let pieDiscR = isAnyHov ? (outR + 6) : outR
 
-            // 1. The Main Liquid Glass Pie Wheel Disc
-            let pieCol = root.s.pieSliceColor || root.s.pieBackgroundColor || "#25121218"
-            let pieBorderCol = root.s.pieOuterBorderColor || "#40ffffff"
-            let pieBW = root.s.pieOuterBorderWidth !== undefined ? root.s.pieOuterBorderWidth : 1.0
+            let maxHProg = 0.0
+            for (let i = 0; i < count; ++i) {
+                let pItem = (typeof pieRepeater !== "undefined" && pieRepeater) ? pieRepeater.itemAt(i) : null
+                if (pItem && typeof pItem.hoverProgress === "number") {
+                    maxHProg = Math.max(maxHProg, pItem.hoverProgress)
+                }
+            }
+            if (maxHProg === 0.0 && hovIdx !== -1) {
+                maxHProg = 1.0
+            }
+
+            // 1. The Main Liquid Glass Pie Wheel Disc (fully animated on hover)
+            let pieDiscR = outR + 12.0 * maxHProg
+            let curBlur = blurRad + (blurHover - blurRad) * maxHProg
+            let curRefr = refr + (refrHover - refr) * maxHProg
+            let curChrom = chrom + (chromHover - chrom) * maxHProg
+            let curSpec = spec + (specHover - spec) * maxHProg
+
+            let pieCol = root.s.pieSliceColor || root.s.pieBackgroundColor || root.s.pillColor || "#25121218"
+            let pieBorderCol = (maxHProg >= 0.5)
+                ? (root.s.accentColor || root.s.pieOuterBorderHoverColor || "#0a84ff")
+                : (root.s.pieOuterBorderColor || root.s.borderColor || "#40ffffff")
+            let baseBW = (root.s.pieOuterBorderWidth !== undefined) ? root.s.pieOuterBorderWidth : 1.0
+            let pieBW = baseBW + (2.0 - baseBW) * maxHProg
 
             pills.push({
                 x: cx,
@@ -311,84 +329,95 @@ Window {
                 halfWidth: pieDiscR,
                 halfHeight: pieDiscR,
                 radius: pieDiscR,
-                blur: blurRad,
-                refraction: refr,
-                chromatic: chrom,
-                specular: spec,
+                blur: curBlur,
+                refraction: curRefr,
+                chromatic: curChrom,
+                specular: curSpec,
                 pillColor: pieCol,
                 borderColor: pieBorderCol,
                 borderWidth: pieBW
             })
 
-            // 2. Embedded Glass Option Badges per sector
-            let sliceAngleDeg = 360 / count
-            let contentRadius = (inR + outR) / 2
-
-            for (let i = 0; i < count; ++i) {
-                let pItem = (typeof pieRepeater !== "undefined" && pieRepeater) ? pieRepeater.itemAt(i) : null
-                let isHov = (hovIdx === i)
-                let hProg = (pItem && typeof pItem.hoverProgress === "number") ? pItem.hoverProgress : (isHov ? 1.0 : 0.0)
-                let s = 1.0 + (1.08 - 1.0) * hProg
-
-                let startDeg = i * sliceAngleDeg - 90
-                let midRad = (startDeg + sliceAngleDeg / 2) * Math.PI / 180
-                let optX = cx + contentRadius * Math.cos(midRad)
-                let optY = cy + contentRadius * Math.sin(midRad)
-
-                let itemObj = menuModel.get(i)
-                let isSub = itemObj && itemObj.submenuName && itemObj.submenuName !== ""
-                let useSubAccent = isSub && (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
-
-                let labelText = (itemObj && itemObj.label) ? itemObj.label : ""
-                let hasIcon = (itemObj && ((itemObj.iconName && itemObj.iconName !== "") || (itemObj.icon && itemObj.icon !== "")))
-                let iconW = hasIcon ? ((root.s.iconSize || 22) + 7) : 0
-                let badgeW = (root.s.showNumberBadges !== false) ? 18 : 0
-                let textW = labelText.length * 8.5
-                let optW = Math.max(72.0, iconW + badgeW + textW + 22.0) * s
-                let optH = 36.0 * s
-                let optRad = (root.s.optionRectRadius !== undefined ? root.s.optionRectRadius : 10.0) * s
-
-                let baseOptCol = (root.s.optionRectColor || (useSubAccent && root.s.pillSubmenuColor ? root.s.pillSubmenuColor : "#25ffffff"))
-                let hovOptCol = (root.s.optionRectHoverColor || (useSubAccent && root.s.submenuAccent ? root.s.submenuAccent : (root.s.accentColor || "#600a84ff")))
-                let baseOptBrd = (root.s.optionRectBorder || (useSubAccent && root.s.pillSubmenuBorder ? root.s.pillSubmenuBorder : "#35ffffff"))
-                let hovOptBrd = (root.s.optionRectHoverBorder || (useSubAccent && root.s.pillSubmenuBorderHover ? root.s.pillSubmenuBorderHover : (root.s.accentColor || "#0a84ff")))
-
-                let optCol = (hProg >= 0.5) ? hovOptCol : baseOptCol
-                let optBorderCol = (hProg >= 0.5) ? hovOptBrd : baseOptBrd
-                let bw = 1.0 + (2.0 - 1.0) * hProg
-
-                pills.push({
-                    x: optX,
-                    y: optY,
-                    halfWidth: optW / 2.0,
-                    halfHeight: optH / 2.0,
-                    radius: optRad,
-                    blur: blurRad + (blurHover - blurRad) * hProg,
-                    refraction: refr + (refrHover - refr) * hProg,
-                    chromatic: chrom + (chromHover - chrom) * hProg,
-                    specular: spec + (specHover - spec) * hProg,
-                    pillColor: optCol,
-                    borderColor: optBorderCol,
-                    borderWidth: bw
-                })
-            }
-
-            // 3. Center Origin / Torus
+            // 2. Center Origin / Torus Hole
             let centerRad = inR
+            let cHProg = root.centerHoverProgress
+            let cBlur = blurRad + (blurHover - blurRad) * cHProg
+            let cRefr = refr + (refrHover - refr) * cHProg
+            let cChrom = chrom + (chromHover - chrom) * cHProg
+            let cSpec = spec + (specHover - spec) * cHProg
+            let cBW = 1.0 + (1.5 - 1.0) * cHProg
+
             pills.push({
                 x: cx,
                 y: cy,
                 halfWidth: centerRad,
                 halfHeight: centerRad,
                 radius: centerRad,
-                blur: blurRad,
-                refraction: refr * 0.8,
-                chromatic: chrom,
-                specular: spec,
-                pillColor: root.s.centerColor || "transparent",
-                borderColor: root.s.centerBorderColor || root.s.centerTorusColor || "#40ffffff",
-                borderWidth: root.s.centerBorderWidth || root.s.centerTorusThickness || 2.0
+                blur: cBlur,
+                refraction: cRefr * 0.8,
+                chromatic: cChrom,
+                specular: cSpec,
+                pillColor: (root.s.centerColor !== undefined) ? root.s.centerColor : "transparent",
+                borderColor: (cHProg < 0.5 && menuContainer.hoveredIndex !== -1)
+                    ? (root.s.centerBorderHoverColor || root.s.centerBorderHover || "transparent")
+                    : (root.hasParent ? (root.s.submenuAccent || "#80bf5af2") : (root.s.centerBorder || root.s.centerBorderColor || root.s.centerTorusColor || "#40ffffff")),
+                borderWidth: cBW
             })
+
+            // 3. Optional Option Badges ONLY if explicitly enabled
+            if (root.s.highlightOptionRect === true) {
+                let sliceAngleDeg = 360 / count
+                let contentRadius = (inR + outR) / 2
+
+                for (let i = 0; i < count; ++i) {
+                    let pItem = (typeof pieRepeater !== "undefined" && pieRepeater) ? pieRepeater.itemAt(i) : null
+                    let isHov = (hovIdx === i)
+                    let hProg = (pItem && typeof pItem.hoverProgress === "number") ? pItem.hoverProgress : (isHov ? 1.0 : 0.0)
+                    let s = 1.0 + (1.08 - 1.0) * hProg
+
+                    let startDeg = i * sliceAngleDeg - 90
+                    let midRad = (startDeg + sliceAngleDeg / 2) * Math.PI / 180
+                    let optX = cx + contentRadius * Math.cos(midRad)
+                    let optY = cy + contentRadius * Math.sin(midRad)
+
+                    let itemObj = menuModel.get(i)
+                    let isSub = itemObj && itemObj.submenuName && itemObj.submenuName !== ""
+                    let useSubAccent = isSub && (root.s.showSubmenuAccent !== false) && (root.s.useSubmenuAccent !== false) && (root.s.submenuAccent !== "transparent") && (root.s.submenuAccent !== "none")
+
+                    let labelText = (itemObj && itemObj.label) ? itemObj.label : ""
+                    let hasIcon = (itemObj && ((itemObj.iconName && itemObj.iconName !== "") || (itemObj.icon && itemObj.icon !== "")))
+                    let iconW = hasIcon ? ((root.s.iconSize || 22) + 7) : 0
+                    let badgeW = (root.s.showNumberBadges !== false) ? 18 : 0
+                    let textW = labelText.length * 8.5
+                    let optW = Math.max(72.0, iconW + badgeW + textW + 22.0) * s
+                    let optH = 36.0 * s
+                    let optRad = (root.s.optionRectRadius !== undefined ? root.s.optionRectRadius : 10.0) * s
+
+                    let baseOptCol = (root.s.optionRectColor || (useSubAccent && root.s.pillSubmenuColor ? root.s.pillSubmenuColor : "#25ffffff"))
+                    let hovOptCol = (root.s.optionRectHoverColor || (useSubAccent && root.s.submenuAccent ? root.s.submenuAccent : (root.s.accentColor || "#600a84ff")))
+                    let baseOptBrd = (root.s.optionRectBorder || (useSubAccent && root.s.pillSubmenuBorder ? root.s.pillSubmenuBorder : "#35ffffff"))
+                    let hovOptBrd = (root.s.optionRectHoverBorder || (useSubAccent && root.s.pillSubmenuBorderHover ? root.s.pillSubmenuBorderHover : (root.s.accentColor || "#0a84ff")))
+
+                    let optCol = (hProg >= 0.5) ? hovOptCol : baseOptCol
+                    let optBorderCol = (hProg >= 0.5) ? hovOptBrd : baseOptBrd
+                    let bw = 1.0 + (2.0 - 1.0) * hProg
+
+                    pills.push({
+                        x: optX,
+                        y: optY,
+                        halfWidth: optW / 2.0,
+                        halfHeight: optH / 2.0,
+                        radius: optRad,
+                        blur: blurRad + (blurHover - blurRad) * hProg,
+                        refraction: refr + (refrHover - refr) * hProg,
+                        chromatic: chrom + (chromHover - chrom) * hProg,
+                        specular: spec + (specHover - spec) * hProg,
+                        pillColor: optCol,
+                        borderColor: optBorderCol,
+                        borderWidth: bw
+                    })
+                }
+            }
 
             output.activateGlassShader(root.width, root.height, cx, cy, pills, chrom, blurRad, vib, refr, spec)
             return
