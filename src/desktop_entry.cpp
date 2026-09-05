@@ -82,14 +82,20 @@ MenuItem DesktopEntry::resolve(const QString &appId) {
         // Only read non-localised keys (i.e. skip Name[fr]=...)
         if (line.startsWith("Name=")    && item.label.isEmpty())
             item.label = line.mid(5).trimmed();
-        else if (line.startsWith("Icon=")    && item.iconName.isEmpty())
-            item.iconName = line.mid(5).trimmed();
+        else if (line.startsWith("Icon=")    && item.iconName.isEmpty()) {
+            QString ic = line.mid(5).trimmed();
+            if ((ic.startsWith('"') && ic.endsWith('"')) || (ic.startsWith('\'') && ic.endsWith('\''))) {
+                ic = ic.mid(1, ic.length() - 2).trimmed();
+            }
+            item.iconName = ic;
+        }
         else if (line.startsWith("Exec=")    && item.command.isEmpty())
             item.command = cleanExec(line.mid(5).trimmed());
     }
 
-    // Fallback: use appId as label if Name= was missing
+    // Fallback: use appId as label or iconName if missing
     if (item.label.isEmpty()) item.label = appId;
+    if (item.iconName.isEmpty()) item.iconName = appId;
 
     return item;
 }
@@ -134,8 +140,13 @@ QList<QVariantMap> DesktopEntry::listAllApplications() {
                     noDisplay = true;
                 else if (line.startsWith("Name=") && name.isEmpty())
                     name = line.mid(5).trimmed();
-                else if (line.startsWith("Icon=") && icon.isEmpty())
-                    icon = line.mid(5).trimmed();
+                else if (line.startsWith("Icon=") && icon.isEmpty()) {
+                    QString ic = line.mid(5).trimmed();
+                    if ((ic.startsWith('"') && ic.endsWith('"')) || (ic.startsWith('\'') && ic.endsWith('\''))) {
+                        ic = ic.mid(1, ic.length() - 2).trimmed();
+                    }
+                    icon = ic;
+                }
                 else if (line.startsWith("Exec=") && exec.isEmpty())
                     exec = cleanExec(line.mid(5).trimmed());
                 else if (line.startsWith("Comment=") && comment.isEmpty())
@@ -149,7 +160,7 @@ QList<QVariantMap> DesktopEntry::listAllApplications() {
             QVariantMap appMap;
             appMap["appId"]    = appId;
             appMap["name"]     = name.isEmpty() ? appId : name;
-            appMap["iconName"] = icon;
+            appMap["iconName"] = icon.isEmpty() ? appId : icon;
             appMap["exec"]     = exec;
             appMap["comment"]  = comment;
             result.append(appMap);

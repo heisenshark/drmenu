@@ -194,8 +194,17 @@ void ConfigEditorBackend::startIndexingIcons() {
         searchPaths << "/run/current-system/sw/share/icons"
                     << QDir::homePath() + "/.nix-profile/share/icons"
                     << QDir::homePath() + "/.local/share/icons"
+                    << "/usr/local/share/icons"
                     << "/usr/share/icons"
+                    << "/run/current-system/sw/share/pixmaps"
+                    << QDir::homePath() + "/.nix-profile/share/pixmaps"
+                    << QDir::homePath() + "/.local/share/pixmaps"
+                    << "/usr/local/share/pixmaps"
                     << "/usr/share/pixmaps";
+
+        for (const QString &dataLoc : QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation)) {
+            searchPaths << (dataLoc + "/icons") << (dataLoc + "/pixmaps");
+        }
 
         for (const QString &base : searchPaths) {
             if (!QDir(base).exists()) continue;

@@ -2,9 +2,11 @@
 #include "config_loader.h"
 #include "theme_manager.h"
 #include "screen_detector.h"
+#include "theme_icon_provider.h"
 
 #include <QGuiApplication>
 #include <QImage>
+#include <QIcon>
 #include <QColor>
 #include <QDebug>
 #include <iostream>
@@ -94,6 +96,30 @@ int main(int argc, char *argv[]) {
     assert(c1.red() >= 180);
     assert(c1.blue() <= 60);
     std::cout << "  [PASS] Single-pass vibrancy correctly boosts saturation without divergence.\n";
+
+    // ── Test 7: Multi-Stage Icon Resolution (Antigravity & Fallbacks) ───────
+    std::cout << "[Test 7] Testing Multi-Stage Icon Resolution...\n";
+    QIcon antigravityIcon = ThemeIconProvider::findIcon("antigravity");
+    std::cout << "  - Antigravity icon resolved: " << (!antigravityIcon.isNull() ? "YES" : "NO") << "\n";
+    assert(!antigravityIcon.isNull());
+
+    QPixmap antigravityPx = ThemeIconProvider::findPixmap("antigravity", QSize(48, 48));
+    std::cout << "  - Antigravity pixmap size: " << antigravityPx.width() << "x" << antigravityPx.height() << "\n";
+    assert(!antigravityPx.isNull());
+    assert(antigravityPx.width() == 48 && antigravityPx.height() == 48);
+
+    QPixmap extPx = ThemeIconProvider::findPixmap("antigravity.png", QSize(64, 64));
+    std::cout << "  - Antigravity with .png extension resolved: " << (!extPx.isNull() ? "YES" : "NO") << "\n";
+    assert(!extPx.isNull());
+
+    QPixmap directPathPx = ThemeIconProvider::findPixmap("/run/current-system/sw/share/pixmaps/antigravity.png", QSize(32, 32));
+    assert(!directPathPx.isNull());
+    std::cout << "  - Direct absolute file path resolved: YES\n";
+
+    QPixmap fallbackPx = ThemeIconProvider::findPixmap("totally-unknown-app-icon-xyz-12345", QSize(48, 48));
+    std::cout << "  - Fallback generic icon resolved: " << (!fallbackPx.isNull() ? "YES" : "NO") << "\n";
+    assert(!fallbackPx.isNull());
+    std::cout << "  [PASS] Multi-stage icon resolution successfully handles non-standard icons and fallbacks.\n";
 
     std::cout << "=== ALL TESTS PASSED SUCCESSFULLY! ===\n";
     return 0;

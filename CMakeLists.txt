@@ -12,7 +12,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Find required Qt6 packages
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickShapes Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickShapes Network Svg)
 find_package(LayerShellQt REQUIRED)
 
 # Modern Qt6 configuration helper
@@ -64,6 +64,7 @@ target_link_libraries(drmenu PRIVATE
     Qt6::Quick
     Qt6::QuickShapes
     Qt6::Network
+    Qt6::Svg
     LayerShellQt::Interface
 )
 
@@ -76,12 +77,14 @@ add_executable(test_screengrab
     src/desktop_entry.cpp
     src/screen_detector.cpp
     src/hypr_shader.cpp
+    src/theme_icon_provider.cpp
 )
 target_link_libraries(test_screengrab PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
     Qt6::Network
+    Qt6::Svg
 )
 target_include_directories(test_screengrab PRIVATE src)
 set_target_properties(test_screengrab PROPERTIES
