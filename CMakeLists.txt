@@ -68,6 +68,11 @@ target_link_libraries(drmenu PRIVATE
     LayerShellQt::Interface
 )
 
+target_compile_definitions(drmenu PRIVATE
+    QT_DECLARATIVE_QML_PATH="${Qt6Qml_DIR}/../../../lib/qt-6/qml"
+    QT_DECLARATIVE_PLUGIN_PATH="${Qt6Qml_DIR}/../../../lib/qt-6/plugins"
+)
+
 # Test executable for screencopy optics, blur, and chromatic aberration
 add_executable(test_screengrab
     tests/test_screengrab.cpp

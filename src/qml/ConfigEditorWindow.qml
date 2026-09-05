@@ -560,14 +560,14 @@ Window {
                                                 border.width: 1
 
                                                 Text {
-                                                    visible: itemDetailsPane.activeItem && itemDetailsPane.activeItem.icon
+                                                    visible: Boolean(itemDetailsPane.activeItem && itemDetailsPane.activeItem.icon)
                                                     text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.icon || "") : ""
                                                     font.pixelSize: 22
                                                     anchors.centerIn: parent
                                                 }
 
                                                 Image {
-                                                    visible: itemDetailsPane.activeItem && !itemDetailsPane.activeItem.icon && itemDetailsPane.activeItem.iconName
+                                                    visible: Boolean(itemDetailsPane.activeItem && !itemDetailsPane.activeItem.icon && itemDetailsPane.activeItem.iconName)
                                                     source: (itemDetailsPane.activeItem && itemDetailsPane.activeItem.iconName) ? ("image://icon/" + itemDetailsPane.activeItem.iconName) : ""
                                                     sourceSize.width: 32
                                                     sourceSize.height: 32

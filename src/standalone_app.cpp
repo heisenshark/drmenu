@@ -5,6 +5,7 @@
 #include "theme_icon_provider.h"
 #include "screen_grabber.h"
 #include "hypr_shader.h"
+#include "qt_environment.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -67,22 +68,7 @@ static int runInternal(int argc, char *argv[], OutputController &output, bool sp
         : TargetScreenInfo{};
 
     QQmlApplicationEngine engine;
-    engine.addImportPath("/run/current-system/sw/lib/qt-6/qml");
-    engine.addImportPath(QDir::homePath() + "/.nix-profile/lib/qt-6/qml");
-    engine.addImportPath(QDir::homePath() + "/.local/state/nix/profile/lib/qt-6/qml");
-    engine.addImportPath("/etc/profiles/per-user/" + qgetenv("USER") + "/lib/qt-6/qml");
-    const char* nixQml = getenv("NIXPKGS_QML_SEARCH_PATHS");
-    if (nixQml && nixQml[0]) {
-        for (const QString &p : QString(nixQml).split(':', Qt::SkipEmptyParts)) {
-            engine.addImportPath(p);
-        }
-    }
-    const char* envQml = getenv("QML2_IMPORT_PATH");
-    if (envQml && envQml[0]) {
-        for (const QString &p : QString(envQml).split(':', Qt::SkipEmptyParts)) {
-            engine.addImportPath(p);
-        }
-    }
+    QtEnvironmentHelper::setup(engine);
 
     ScreenGrabber screenGrabber;
     engine.rootContext()->setContextProperty("output", &output);

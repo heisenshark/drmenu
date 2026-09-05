@@ -1,6 +1,7 @@
 #include "config_editor_app.h"
 #include "config_editor_backend.h"
 #include "theme_icon_provider.h"
+#include "qt_environment.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -23,12 +24,7 @@ int ConfigEditorApp::run(int argc, char *argv[], const QString &initialConfigPat
     app.setWindowIcon(QIcon::fromTheme("preferences-system"));
 
     QQmlApplicationEngine engine;
-    const char* envQml = getenv("QML2_IMPORT_PATH");
-    if (envQml && envQml[0]) {
-        for (const QString &p : QString(envQml).split(':', Qt::SkipEmptyParts)) {
-            engine.addImportPath(p);
-        }
-    }
+    QtEnvironmentHelper::setup(engine);
 
     engine.addImageProvider("icon", new ThemeIconProvider);
 
