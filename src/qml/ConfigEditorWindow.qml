@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
+import QtQuick.Layouts
 
 Window {
     id: editorWindow
@@ -470,259 +471,272 @@ Window {
                     width: parent.width - 594
                     height: parent.height
 
-                    Column {
+                    ColumnLayout {
                         anchors.fill: parent
                         spacing: 8
 
                         TabBar {
                             id: inspectorTabBar
-                            width: parent.width
+                            Layout.fillWidth: true
                             currentIndex: 0
 
                             TabButton { text: "Item Details" }
                             TabButton { text: "Menu Settings" }
                         }
 
-                        // ── Tab 0: Item Details ──────────────────────────────
-                        ScrollView {
-                            visible: inspectorTabBar.currentIndex === 0
-                            width: parent.width
-                            height: parent.height - 48
-                            clip: true
+                        StackLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            currentIndex: inspectorTabBar.currentIndex
 
-                            Column {
-                                width: parent.width - 16
-                                spacing: 10
-
-                                property var activeItem: {
-                                    let items = editorWindow.currentItems()
-                                    if (editorWindow.selectedItemIndex >= 0 && editorWindow.selectedItemIndex < items.length) {
-                                        return items[editorWindow.selectedItemIndex]
-                                    }
-                                    return null
-                                }
-
-                                function setItemProperty(prop, value) {
-                                    let items = editorWindow.currentItems().slice()
-                                    if (editorWindow.selectedItemIndex < 0 || editorWindow.selectedItemIndex >= items.length) return
-                                    let it = Object.assign({}, items[editorWindow.selectedItemIndex])
-                                    if (value === "") delete it[prop]
-                                    else it[prop] = value
-                                    items[editorWindow.selectedItemIndex] = it
-                                    let m = editorWindow.currentMenuData()
-                                    m.items = items
-                                    let copy = Object.assign({}, editorWindow.menusMap)
-                                    copy[editorWindow.selectedMenuKey] = m
-                                    editorWindow.menusMap = copy
-                                }
-
-                                Label {
-                                    visible: !parent.activeItem
-                                    text: "No item selected."
-                                    font.italic: true
-                                }
+                            // ── Tab 0: Item Details ──────────────────────────────
+                            ScrollView {
+                                id: itemDetailsScroll
+                                clip: true
+                                contentWidth: availableWidth
+                                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                                 Column {
-                                    visible: parent.activeItem !== null
-                                    width: parent.width
-                                    spacing: 10
+                                    id: itemDetailsPane
+                                    width: itemDetailsScroll.availableWidth - 8
+                                    spacing: 12
 
-                                    Label { text: "Label / Title:"; font.bold: true }
-                                    TextField {
-                                        width: parent.width
-                                        text: parent.parent.activeItem ? (parent.parent.activeItem.label || "") : ""
-                                        selectByMouse: true
-                                        onTextEdited: parent.parent.setItemProperty("label", text)
+                                    property var activeItem: {
+                                        let items = editorWindow.currentItems()
+                                        if (editorWindow.selectedItemIndex >= 0 && editorWindow.selectedItemIndex < items.length) {
+                                            return items[editorWindow.selectedItemIndex]
+                                        }
+                                        return null
                                     }
 
-                                    Label { text: "Icon Selection:"; font.bold: true }
-                                    Row {
-                                        width: parent.width
+                                    function setItemProperty(prop, value) {
+                                        let items = editorWindow.currentItems().slice()
+                                        if (editorWindow.selectedItemIndex < 0 || editorWindow.selectedItemIndex >= items.length) return
+                                        let it = Object.assign({}, items[editorWindow.selectedItemIndex])
+                                        if (value === "") delete it[prop]
+                                        else it[prop] = value
+                                        items[editorWindow.selectedItemIndex] = it
+                                        let m = editorWindow.currentMenuData()
+                                        m.items = items
+                                        let copy = Object.assign({}, editorWindow.menusMap)
+                                        copy[editorWindow.selectedMenuKey] = m
+                                        editorWindow.menusMap = copy
+                                    }
+
+                                    Label {
+                                        visible: !itemDetailsPane.activeItem
+                                        text: "No item selected."
+                                        font.italic: true
+                                    }
+
+                                    Column {
+                                        id: itemFormCol
+                                        visible: itemDetailsPane.activeItem !== null
+                                        width: itemDetailsPane.width
                                         spacing: 10
 
-                                        Rectangle {
-                                            width: 40
-                                            height: 40
-                                            radius: 6
-                                            color: sysPalette.base
-                                            border.color: sysPalette.mid
-                                            border.width: 1
-
-                                            Text {
-                                                visible: parent.parent.parent.parent.activeItem && parent.parent.parent.parent.activeItem.icon
-                                                text: parent.parent.parent.parent.activeItem ? (parent.parent.parent.parent.activeItem.icon || "") : ""
-                                                font.pixelSize: 22
-                                                anchors.centerIn: parent
-                                            }
-
-                                            Image {
-                                                visible: parent.parent.parent.parent.activeItem && !parent.parent.parent.parent.activeItem.icon && parent.parent.parent.parent.activeItem.iconName
-                                                source: (parent.parent.parent.parent.activeItem && parent.parent.parent.parent.activeItem.iconName) ? ("image://icon/" + parent.parent.parent.parent.activeItem.iconName) : ""
-                                                sourceSize.width: 32
-                                                sourceSize.height: 32
-                                                width: 32
-                                                height: 32
-                                                anchors.centerIn: parent
-                                            }
+                                        Label { text: "Label / Title:"; font.bold: true }
+                                        TextField {
+                                            width: itemFormCol.width
+                                            text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.label || "") : ""
+                                            placeholderText: "Action label (e.g. Google Antigravity)"
+                                            selectByMouse: true
+                                            onTextEdited: itemDetailsPane.setItemProperty("label", text)
                                         }
 
-                                        Button {
-                                            text: "Browse Icons & Apps..."
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            onClicked: iconPickerDialog.openPicker()
-                                        }
-                                    }
+                                        Label { text: "Icon Selection:"; font.bold: true }
+                                        RowLayout {
+                                            width: itemFormCol.width
+                                            spacing: 10
 
-                                    Row {
-                                        width: parent.width
-                                        spacing: 8
+                                            Rectangle {
+                                                Layout.preferredWidth: 40
+                                                Layout.preferredHeight: 40
+                                                radius: 6
+                                                color: sysPalette.base
+                                                border.color: sysPalette.mid
+                                                border.width: 1
 
-                                        Column {
-                                            width: parent.width / 2 - 4
-                                            spacing: 4
-                                            Label { text: "Icon Name (Theme):"; font.pixelSize: 11 }
-                                            TextField {
-                                                width: parent.width
-                                                text: parent.parent.parent.parent.activeItem ? (parent.parent.parent.parent.activeItem.iconName || "") : ""
-                                                selectByMouse: true
-                                                onTextEdited: parent.parent.parent.parent.setItemProperty("iconName", text)
+                                                Text {
+                                                    visible: itemDetailsPane.activeItem && itemDetailsPane.activeItem.icon
+                                                    text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.icon || "") : ""
+                                                    font.pixelSize: 22
+                                                    anchors.centerIn: parent
+                                                }
+
+                                                Image {
+                                                    visible: itemDetailsPane.activeItem && !itemDetailsPane.activeItem.icon && itemDetailsPane.activeItem.iconName
+                                                    source: (itemDetailsPane.activeItem && itemDetailsPane.activeItem.iconName) ? ("image://icon/" + itemDetailsPane.activeItem.iconName) : ""
+                                                    sourceSize.width: 32
+                                                    sourceSize.height: 32
+                                                    width: 32
+                                                    height: 32
+                                                    anchors.centerIn: parent
+                                                }
+                                            }
+
+                                            Button {
+                                                text: "Browse Icons & Apps..."
+                                                Layout.fillWidth: true
+                                                onClicked: iconPickerDialog.openPicker()
                                             }
                                         }
 
-                                        Column {
-                                            width: parent.width / 2 - 4
-                                            spacing: 4
-                                            Label { text: "Emoji / Symbol:"; font.pixelSize: 11 }
-                                            TextField {
-                                                width: parent.width
-                                                text: parent.parent.parent.parent.activeItem ? (parent.parent.parent.parent.activeItem.icon || "") : ""
-                                                selectByMouse: true
-                                                onTextEdited: parent.parent.parent.parent.setItemProperty("icon", text)
+                                        RowLayout {
+                                            width: itemFormCol.width
+                                            spacing: 8
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 4
+                                                Label { text: "Icon Name (Theme):"; font.pixelSize: 11; font.bold: true }
+                                                TextField {
+                                                    Layout.fillWidth: true
+                                                    text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.iconName || "") : ""
+                                                    placeholderText: "e.g. antigravity"
+                                                    selectByMouse: true
+                                                    onTextEdited: itemDetailsPane.setItemProperty("iconName", text)
+                                                }
                                             }
-                                        }
-                                    }
 
-                                    Label { text: "Command (Shell Exec):"; font.bold: true }
-                                    TextField {
-                                        width: parent.width
-                                        text: parent.parent.activeItem ? (parent.parent.activeItem.command || "") : ""
-                                        selectByMouse: true
-                                        onTextEdited: parent.parent.setItemProperty("command", text)
-                                    }
-
-                                    Row {
-                                        width: parent.width
-                                        spacing: 8
-
-                                        Column {
-                                            width: parent.width / 2 - 4
-                                            spacing: 4
-                                            Label { text: "Submenu Target:"; font.bold: true }
-                                            TextField {
-                                                width: parent.width
-                                                text: parent.parent.parent.parent.activeItem ? (parent.parent.parent.parent.activeItem.submenu || "") : ""
-                                                placeholderText: "e.g. system"
-                                                selectByMouse: true
-                                                onTextEdited: parent.parent.parent.parent.setItemProperty("submenu", text)
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 4
+                                                Label { text: "Emoji / Symbol:"; font.pixelSize: 11; font.bold: true }
+                                                TextField {
+                                                    Layout.fillWidth: true
+                                                    text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.icon || "") : ""
+                                                    placeholderText: "e.g. 🚀"
+                                                    selectByMouse: true
+                                                    onTextEdited: itemDetailsPane.setItemProperty("icon", text)
+                                                }
                                             }
                                         }
 
-                                        Column {
-                                            width: parent.width / 2 - 4
-                                            spacing: 4
-                                            Label { text: "Shortcut Key:"; font.bold: true }
-                                            TextField {
-                                                width: parent.width
-                                                text: parent.parent.parent.parent.activeItem ? (parent.parent.parent.parent.activeItem.key || "") : ""
-                                                placeholderText: "e.g. s or 1"
-                                                selectByMouse: true
-                                                onTextEdited: parent.parent.parent.parent.setItemProperty("key", text)
+                                        Label { text: "Command (Shell Exec):"; font.bold: true }
+                                        TextField {
+                                            width: itemFormCol.width
+                                            text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.command || "") : ""
+                                            placeholderText: "e.g. antigravity %U"
+                                            selectByMouse: true
+                                            onTextEdited: itemDetailsPane.setItemProperty("command", text)
+                                        }
+
+                                        RowLayout {
+                                            width: itemFormCol.width
+                                            spacing: 8
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 4
+                                                Label { text: "Submenu Target:"; font.bold: true }
+                                                TextField {
+                                                    Layout.fillWidth: true
+                                                    text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.submenu || "") : ""
+                                                    placeholderText: "e.g. system"
+                                                    selectByMouse: true
+                                                    onTextEdited: itemDetailsPane.setItemProperty("submenu", text)
+                                                }
+                                            }
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 4
+                                                Label { text: "Shortcut Key:"; font.bold: true }
+                                                TextField {
+                                                    Layout.fillWidth: true
+                                                    text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.key || "") : ""
+                                                    placeholderText: "e.g. s or 1"
+                                                    selectByMouse: true
+                                                    onTextEdited: itemDetailsPane.setItemProperty("key", text)
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        // ── Tab 1: Menu Settings ─────────────────────────────
-                        ScrollView {
-                            visible: inspectorTabBar.currentIndex === 1
-                            width: parent.width
-                            height: parent.height - 48
-                            clip: true
+                            // ── Tab 1: Menu Settings ─────────────────────────────
+                            ScrollView {
+                                id: menuSettingsScroll
+                                clip: true
+                                contentWidth: availableWidth
+                                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-                            Column {
-                                width: parent.width - 16
-                                spacing: 12
+                                Column {
+                                    id: menuSettingsCol
+                                    width: menuSettingsScroll.availableWidth - 8
+                                    spacing: 12
 
-                                function setMenuProperty(prop, value) {
-                                    let m = Object.assign({}, editorWindow.currentMenuData())
-                                    if (value === "") delete m[prop]
-                                    else m[prop] = value
-                                    let copy = Object.assign({}, editorWindow.menusMap)
-                                    copy[editorWindow.selectedMenuKey] = m
-                                    editorWindow.menusMap = copy
-                                }
-
-                                function setStyleProperty(prop, value) {
-                                    let m = Object.assign({}, editorWindow.currentMenuData())
-                                    let s = Object.assign({}, m.style || {})
-                                    if (value === "") delete s[prop]
-                                    else s[prop] = value
-                                    m.style = s
-                                    let copy = Object.assign({}, editorWindow.menusMap)
-                                    copy[editorWindow.selectedMenuKey] = m
-                                    editorWindow.menusMap = copy
-                                }
-
-                                Label { text: "Theme Preset:"; font.bold: true }
-                                ComboBox {
-                                    width: parent.width
-                                    model: configBackend ? configBackend.availableThemes() : []
-                                    currentIndex: {
-                                        let cur = editorWindow.currentMenuData().theme || editorWindow.configDoc.theme || "user-glass"
-                                        return model.indexOf(cur)
+                                    function setMenuProperty(prop, value) {
+                                        let m = Object.assign({}, editorWindow.currentMenuData())
+                                        if (value === "") delete m[prop]
+                                        else m[prop] = value
+                                        let copy = Object.assign({}, editorWindow.menusMap)
+                                        copy[editorWindow.selectedMenuKey] = m
+                                        editorWindow.menusMap = copy
                                     }
-                                    onActivated: function(index) {
-                                        let selected = model[index]
-                                        parent.setMenuProperty("theme", selected)
+
+                                    function setStyleProperty(prop, value) {
+                                        let m = Object.assign({}, editorWindow.currentMenuData())
+                                        let s = Object.assign({}, m.style || {})
+                                        if (value === "") delete s[prop]
+                                        else s[prop] = value
+                                        m.style = s
+                                        let copy = Object.assign({}, editorWindow.menusMap)
+                                        copy[editorWindow.selectedMenuKey] = m
+                                        editorWindow.menusMap = copy
                                     }
-                                }
 
-                                Label { text: "Layout Style:"; font.bold: true }
-                                Row {
-                                    spacing: 16
-
-                                    RadioButton {
-                                        text: "🥧 Pie Menu"
-                                        checked: {
-                                            let s = editorWindow.currentMenuData().style || {}
-                                            return s.layout === "pie"
+                                    Label { text: "Theme Preset:"; font.bold: true }
+                                    ComboBox {
+                                        width: menuSettingsCol.width
+                                        model: configBackend ? configBackend.availableThemes() : []
+                                        currentIndex: {
+                                            let cur = editorWindow.currentMenuData().theme || editorWindow.configDoc.theme || "user-glass"
+                                            return model.indexOf(cur)
                                         }
-                                        onClicked: parent.parent.setStyleProperty("layout", "pie")
-                                    }
-
-                                    RadioButton {
-                                        text: "💊 Ring / Pills"
-                                        checked: {
-                                            let s = editorWindow.currentMenuData().style || {}
-                                            return s.layout !== "pie"
+                                        onActivated: function(index) {
+                                            let selected = model[index]
+                                            menuSettingsCol.setMenuProperty("theme", selected)
                                         }
-                                        onClicked: parent.parent.setStyleProperty("layout", "ring")
                                     }
-                                }
 
-                                Label { text: "Behavior:"; font.bold: true }
-                                CheckBox {
-                                    text: "Spawn menu at mouse cursor position"
-                                    checked: editorWindow.currentMenuData().spawnAtMouse !== false
-                                    onToggled: parent.setMenuProperty("spawnAtMouse", checked)
-                                }
+                                    Label { text: "Layout Style:"; font.bold: true }
+                                    Row {
+                                        spacing: 16
 
-                                CheckBox {
-                                    text: "Escape key closes entire menu stack"
-                                    checked: editorWindow.currentMenuData().escapeClosesAll === true
-                                    onToggled: parent.setMenuProperty("escapeClosesAll", checked)
+                                        RadioButton {
+                                            text: "🥧 Pie Menu"
+                                            checked: {
+                                                let s = editorWindow.currentMenuData().style || {}
+                                                return s.layout === "pie"
+                                            }
+                                            onClicked: menuSettingsCol.setStyleProperty("layout", "pie")
+                                        }
+
+                                        RadioButton {
+                                            text: "💊 Ring / Pills"
+                                            checked: {
+                                                let s = editorWindow.currentMenuData().style || {}
+                                                return s.layout !== "pie"
+                                            }
+                                            onClicked: menuSettingsCol.setStyleProperty("layout", "ring")
+                                        }
+                                    }
+
+                                    Label { text: "Behavior:"; font.bold: true }
+                                    CheckBox {
+                                        text: "Spawn menu at mouse cursor position"
+                                        checked: editorWindow.currentMenuData().spawnAtMouse !== false
+                                        onToggled: menuSettingsCol.setMenuProperty("spawnAtMouse", checked)
+                                    }
+
+                                    CheckBox {
+                                        text: "Escape key closes entire menu stack"
+                                        checked: editorWindow.currentMenuData().escapeClosesAll === true
+                                        onToggled: menuSettingsCol.setMenuProperty("escapeClosesAll", checked)
+                                    }
                                 }
                             }
                         }

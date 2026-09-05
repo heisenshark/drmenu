@@ -1,13 +1,14 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
 Dialog {
     id: iconPickerDialog
     title: "Select Icon or Application"
     modal: true
     anchors.centerIn: parent
-    width: Math.min(parent.width - 40, 740)
-    height: Math.min(parent.height - 40, 560)
+    width: Math.min(parent.width - 40, 760)
+    height: Math.min(parent.height - 40, 580)
     standardButtons: Dialog.Close
 
     signal iconSelected(string iconName)
@@ -58,15 +59,13 @@ Dialog {
         }
     }
 
-    contentItem: Column {
+    contentItem: ColumnLayout {
         spacing: 10
-        anchors.fill: parent
-        anchors.margins: 6
 
         // Search Input
         TextField {
             id: searchField
-            width: parent.width
+            Layout.fillWidth: true
             placeholderText: "Search applications, icon names, or keywords..."
             selectByMouse: true
             onTextChanged: searchTimer.restart()
@@ -82,7 +81,7 @@ Dialog {
         // Tab Bar
         TabBar {
             id: tabBar
-            width: parent.width
+            Layout.fillWidth: true
             currentIndex: 0
 
             TabButton {
@@ -97,43 +96,42 @@ Dialog {
         }
 
         // Tab Content
-        Item {
-            width: parent.width
-            height: iconPickerDialog.height - 150
+        StackLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: tabBar.currentIndex
 
             // ── Tab 0: Applications ──────────────────────────────────────────
             ScrollView {
-                anchors.fill: parent
-                visible: tabBar.currentIndex === 0
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 ListView {
                     id: appsView
+                    anchors.fill: parent
                     model: iconPickerDialog.filteredAppsList
                     spacing: 2
+                    boundsBehavior: Flickable.StopAtBounds
 
                     delegate: ItemDelegate {
                         width: appsView.width
-                        height: 48
+                        height: 50
 
-                        contentItem: Row {
+                        contentItem: RowLayout {
                             spacing: 12
-                            anchors.verticalCenter: parent.verticalCenter
 
                             Image {
-                                width: 32
-                                height: 32
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
                                 source: modelData.iconName ? ("image://icon/" + modelData.iconName) : "image://icon/application-x-executable"
                                 sourceSize.width: 32
                                 sourceSize.height: 32
-                                anchors.verticalCenter: parent.verticalCenter
+                                fillMode: Image.PreserveAspectFit
                             }
 
-                            Column {
-                                anchors.verticalCenter: parent.verticalCenter
+                            ColumnLayout {
+                                Layout.fillWidth: true
                                 spacing: 2
-                                width: appsView.width - 60
 
                                 Text {
                                     text: modelData.name || modelData.appId
@@ -141,7 +139,7 @@ Dialog {
                                     font.bold: true
                                     font.pixelSize: 13
                                     elide: Text.ElideRight
-                                    width: parent.width
+                                    Layout.fillWidth: true
                                 }
 
                                 Text {
@@ -149,7 +147,7 @@ Dialog {
                                     color: sysPalette.dark
                                     font.pixelSize: 11
                                     elide: Text.ElideRight
-                                    width: parent.width
+                                    Layout.fillWidth: true
                                 }
                             }
                         }
@@ -164,42 +162,43 @@ Dialog {
 
             // ── Tab 1: System Icons ──────────────────────────────────────────
             ScrollView {
-                anchors.fill: parent
-                visible: tabBar.currentIndex === 1
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 GridView {
                     id: iconsGrid
+                    anchors.fill: parent
                     cellWidth: 80
                     cellHeight: 76
                     model: iconPickerDialog.filteredIconsList
+                    boundsBehavior: Flickable.StopAtBounds
 
                     delegate: ItemDelegate {
                         width: 76
                         height: 72
 
-                        contentItem: Column {
+                        contentItem: ColumnLayout {
                             anchors.centerIn: parent
                             spacing: 4
 
                             Image {
-                                width: 32
-                                height: 32
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
+                                Layout.alignment: Qt.AlignHCenter
                                 source: "image://icon/" + modelData
                                 sourceSize.width: 32
                                 sourceSize.height: 32
-                                anchors.horizontalCenter: parent.horizontalCenter
+                                fillMode: Image.PreserveAspectFit
                             }
 
                             Text {
                                 text: modelData
                                 color: sysPalette.text
                                 font.pixelSize: 9
-                                width: 70
+                                Layout.preferredWidth: 70
                                 elide: Text.ElideMiddle
                                 horizontalAlignment: Text.AlignHCenter
-                                anchors.horizontalCenter: parent.horizontalCenter
+                                Layout.alignment: Qt.AlignHCenter
                             }
                         }
 
@@ -213,8 +212,6 @@ Dialog {
 
             // ── Tab 2: Emojis & Symbols ──────────────────────────────────────
             ScrollView {
-                anchors.fill: parent
-                visible: tabBar.currentIndex === 2
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
