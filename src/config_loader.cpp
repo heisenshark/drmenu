@@ -18,7 +18,7 @@ QString ConfigLoader::defaultConfigPath() {
     return QDir::homePath() + "/.config/drmenu/config.json";
 }
 
-static QByteArray cleanJsonc(const QByteArray &raw) {
+QByteArray ConfigLoader::preprocessJsonc(const QByteArray &raw) {
     // Pass 1: Strip single-line (//) and multi-line (/* */) comments outside strings
     QByteArray noComments;
     noComments.reserve(raw.size());
@@ -167,7 +167,7 @@ static QJsonObject loadRoot(const QString &configPath) {
         return {};
     }
     QJsonParseError err;
-    QByteArray cleaned = cleanJsonc(file.readAll());
+    QByteArray cleaned = ConfigLoader::preprocessJsonc(file.readAll());
     QJsonDocument doc = QJsonDocument::fromJson(cleaned, &err);
     if (err.error != QJsonParseError::NoError) {
         QTextStream(stderr) << "drmenu: JSON parse error in " << path

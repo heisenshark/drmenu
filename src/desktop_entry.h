@@ -9,4 +9,7 @@ public:
     // searches XDG application directories and returns a fully populated MenuItem.
     // Returns an empty MenuItem (label is empty) if not found.
     static MenuItem resolve(const QString &appId);
+
+    // Lists all installed desktop applications with their name, exec, iconName, appId, and comment.
+    static QList<QVariantMap> listAllApplications();
 };

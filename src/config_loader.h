@@ -30,4 +30,5 @@ public:
                                  const QString &configPath = {});
 
     static QStringList availableMenus(const QString &configPath = {});
+    static QByteArray preprocessJsonc(const QByteArray &raw);
 };

@@ -4,12 +4,16 @@
 #include "client.h"
 #include "standalone_app.h"
 #include "hypr_shader.h"
+#include "config_editor_app.h"
 
 #include <QTextStream>
 #include <QProcess>
 
 int main(int argc, char *argv[]) {
     ParsedArgs args = CliParser::parse(argc, argv);
+
+    if (args.editorMode)
+        return ConfigEditorApp::run(argc, argv, args.configPath);
 
     if (args.pingMode) {
         QTextStream out(stdout);
@@ -51,6 +55,7 @@ int main(int argc, char *argv[]) {
         QTextStream(stderr) << "drmenu: no items provided.\n"
                             << "Usage:\n"
                             << "  drmenu --daemon                      (start background daemon)\n"
+                            << "  drmenu --editor                      (launch GUI configuration editor)\n"
                             << "  drmenu --menu <name>                 (launch a named menu from config)\n"
                             << "  drmenu --media                       (launch dynamic MPRIS media sources menu)\n"
                             << "  drmenu --menu <name> --config <path> (use a custom config file)\n"

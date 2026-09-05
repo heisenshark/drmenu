@@ -33,6 +33,8 @@ qt_add_executable(drmenu
     src/client.cpp
     src/standalone_app.cpp
     src/hypr_shader.cpp
+    src/config_editor_backend.cpp
+    src/config_editor_app.cpp
 )
 
 # Place binary in a 'bin' subdirectory to avoid conflicts with QML module directories
@@ -50,6 +52,8 @@ qt_add_qml_module(drmenu
         src/qml/PieDelimitersOverlay.qml
         src/qml/PillDelegate.qml
         src/qml/CenterPivot.qml
+        src/qml/ConfigEditorWindow.qml
+        src/qml/IconPickerModal.qml
 )
 
 # Link Qt6 libraries and LayerShellQt

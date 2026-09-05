@@ -93,3 +93,74 @@ MenuItem DesktopEntry::resolve(const QString &appId) {
 
     return item;
 }
+
+QList<QVariantMap> DesktopEntry::listAllApplications() {
+    QList<QVariantMap> result;
+    QSet<QString> seenApps;
+
+    QStringList dataDirs = QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation);
+    QStringList searchDirs;
+    for (const QString &base : dataDirs) {
+        if (!QDir(base).exists()) continue;
+        searchDirs << base;
+        QDirIterator it(base, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+        while (it.hasNext()) searchDirs << it.next();
+    }
+
+    for (const QString &dir : searchDirs) {
+        QDir d(dir);
+        QFileInfoList files = d.entryInfoList({"*.desktop"}, QDir::Files | QDir::Readable);
+        for (const QFileInfo &fi : files) {
+            QString appId = fi.baseName();
+            if (seenApps.contains(appId)) continue;
+
+            QFile file(fi.absoluteFilePath());
+            if (!file.open(QIODevice::ReadOnly)) continue;
+
+            bool inEntry = false;
+            bool noDisplay = false;
+            QString name, icon, exec, comment, type = "Application";
+
+            QTextStream ts(&file);
+            while (!ts.atEnd()) {
+                QString line = ts.readLine().trimmed();
+                if (line == "[Desktop Entry]") { inEntry = true; continue; }
+                if (line.startsWith('[') && inEntry) break;
+                if (!inEntry) continue;
+
+                if (line.startsWith("Type=") && type == "Application")
+                    type = line.mid(5).trimmed();
+                else if (line.startsWith("NoDisplay=true") || line.startsWith("Hidden=true"))
+                    noDisplay = true;
+                else if (line.startsWith("Name=") && name.isEmpty())
+                    name = line.mid(5).trimmed();
+                else if (line.startsWith("Icon=") && icon.isEmpty())
+                    icon = line.mid(5).trimmed();
+                else if (line.startsWith("Exec=") && exec.isEmpty())
+                    exec = cleanExec(line.mid(5).trimmed());
+                else if (line.startsWith("Comment=") && comment.isEmpty())
+                    comment = line.mid(8).trimmed();
+            }
+
+            if (noDisplay || type != "Application" || (name.isEmpty() && exec.isEmpty()))
+                continue;
+
+            seenApps.insert(appId);
+            QVariantMap appMap;
+            appMap["appId"]    = appId;
+            appMap["name"]     = name.isEmpty() ? appId : name;
+            appMap["iconName"] = icon;
+            appMap["exec"]     = exec;
+            appMap["comment"]  = comment;
+            result.append(appMap);
+        }
+    }
+
+    // Sort alphabetically by name
+    std::sort(result.begin(), result.end(), [](const QVariantMap &a, const QVariantMap &b) {
+        return a["name"].toString().localeAwareCompare(b["name"].toString()) < 0;
+    });
+
+    return result;
+}
+
