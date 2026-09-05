@@ -185,7 +185,7 @@ ParsedArgs CliParser::parse(int argc, char *argv[]) {
     } else if (!positional.isEmpty()) {
         for (const QString &a : positional)
             args.items.append(parseEntry(a));
-    } else if (!args.daemonMode && !args.pingMode && args.menuName.isEmpty()) {
+    } else if (!args.daemonMode && !args.pingMode && !args.editorMode && args.menuName.isEmpty()) {
         // stdin items (dmenu style) only if not daemon mode and no --menu flag
         QTextStream in(stdin);
         while (!in.atEnd()) {
