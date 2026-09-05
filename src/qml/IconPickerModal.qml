@@ -1,40 +1,35 @@
 import QtQuick
+import QtQuick.Controls
 
-Rectangle {
-    id: iconPickerModal
-    anchors.fill: parent
-    color: "#bb000000"
-    visible: false
-    z: 1000
+Dialog {
+    id: iconPickerDialog
+    title: "Select Icon or Application"
+    modal: true
+    anchors.centerIn: parent
+    width: Math.min(parent.width - 40, 740)
+    height: Math.min(parent.height - 40, 560)
+    standardButtons: Dialog.Close
 
     signal iconSelected(string iconName)
     signal emojiSelected(string emoji)
     signal appSelected(var appData)
-    signal closed()
 
-    // Prevent clicks from falling through
-    MouseArea {
-        anchors.fill: parent
-        onClicked: iconPickerModal.close()
-    }
-
-    function open() {
-        searchField.text = ""
-        currentTab = 0
-        visible = true
-        searchField.forceActiveFocus()
-        refreshLists()
-    }
-
-    function close() {
-        visible = false
-        closed()
-    }
-
-    property int currentTab: 0 // 0: Apps, 1: System Icons, 2: Emojis
     property var allAppsList: []
     property var filteredAppsList: []
     property var filteredIconsList: []
+
+    SystemPalette {
+        id: sysPalette
+        colorGroup: SystemPalette.Active
+    }
+
+    function openPicker() {
+        searchField.text = ""
+        tabBar.currentIndex = 0
+        refreshLists()
+        open()
+        searchField.forceActiveFocus()
+    }
 
     function refreshLists() {
         let q = searchField.text.trim().toLowerCase()
@@ -42,7 +37,6 @@ Rectangle {
             allAppsList = configBackend.installedApps()
         }
 
-        // Filter apps
         if (q === "") {
             filteredAppsList = allAppsList
         } else {
@@ -59,194 +53,78 @@ Rectangle {
             filteredAppsList = res
         }
 
-        // Filter system icons
         if (configBackend) {
             filteredIconsList = configBackend.searchSystemIcons(q, 150)
         }
     }
 
-    Rectangle {
-        id: dialogCard
-        width: Math.min(parent.width - 40, 720)
-        height: Math.min(parent.height - 40, 580)
-        anchors.centerIn: parent
-        radius: 12
-        color: "#181820"
-        border.color: "#353545"
-        border.width: 1
+    contentItem: Column {
+        spacing: 10
+        anchors.fill: parent
+        anchors.margins: 6
 
-        MouseArea {
-            anchors.fill: parent // Absorb clicks inside dialog
+        // Search Input
+        TextField {
+            id: searchField
+            width: parent.width
+            placeholderText: "Search applications, icon names, or keywords..."
+            selectByMouse: true
+            onTextChanged: searchTimer.restart()
+
+            Timer {
+                id: searchTimer
+                interval: 120
+                repeat: false
+                onTriggered: iconPickerDialog.refreshLists()
+            }
         }
 
-        Column {
-            anchors.fill: parent
-            anchors.margins: 18
-            spacing: 14
+        // Tab Bar
+        TabBar {
+            id: tabBar
+            width: parent.width
+            currentIndex: 0
 
-            // ── Dialog Header ───────────────────────────────────────────────
-            Row {
-                width: parent.width
-                height: 28
-
-                Text {
-                    text: "Select Icon or Application"
-                    color: "#ffffff"
-                    font.pixelSize: 17
-                    font.bold: true
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-
-                Item { width: 1; height: 1; property real flex: 1 }
-
-                Rectangle {
-                    width: 28
-                    height: 28
-                    radius: 14
-                    color: closeHover.containsMouse ? "#3a3a4c" : "#242430"
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "✕"
-                        color: "#cccccc"
-                        font.pixelSize: 13
-                    }
-
-                    MouseArea {
-                        id: closeHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: iconPickerModal.close()
-                    }
-                }
+            TabButton {
+                text: "Installed Applications (" + iconPickerDialog.filteredAppsList.length + ")"
             }
-
-            // ── Search Field ────────────────────────────────────────────────
-            Rectangle {
-                width: parent.width
-                height: 38
-                radius: 8
-                color: "#101015"
-                border.color: searchField.activeFocus ? "#3b82f6" : "#2a2a38"
-                border.width: 1
-
-                Row {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    spacing: 8
-
-                    Text {
-                        text: "🔍"
-                        color: "#808090"
-                        font.pixelSize: 14
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    TextInput {
-                        id: searchField
-                        width: parent.width - 60
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: "#f0f0f5"
-                        font.pixelSize: 14
-                        clip: true
-                        selectByMouse: true
-
-                        Text {
-                            anchors.fill: parent
-                            text: "Search applications, icon names, keywords..."
-                            color: "#555566"
-                            font.pixelSize: 14
-                            visible: !searchField.text && !searchField.activeFocus
-                        }
-
-                        onTextChanged: refreshTimer.restart()
-                    }
-
-                    Timer {
-                        id: refreshTimer
-                        interval: 120
-                        repeat: false
-                        onTriggered: iconPickerModal.refreshLists()
-                    }
-                }
+            TabButton {
+                text: "System Theme Icons (" + iconPickerDialog.filteredIconsList.length + ")"
             }
-
-            // ── Tab Bar ─────────────────────────────────────────────────────
-            Row {
-                spacing: 8
-                width: parent.width
-
-                Repeater {
-                    model: [
-                        { label: "Installed Apps (" + iconPickerModal.filteredAppsList.length + ")" },
-                        { label: "System Icons (" + iconPickerModal.filteredIconsList.length + ")" },
-                        { label: "Emojis & Symbols" }
-                    ]
-
-                    Rectangle {
-                        width: 170
-                        height: 32
-                        radius: 6
-                        color: iconPickerModal.currentTab === index ? "#3b82f6" : (tabHover.containsMouse ? "#282836" : "#20202a")
-                        border.color: iconPickerModal.currentTab === index ? "#60a5fa" : "#2e2e3e"
-                        border.width: 1
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: modelData.label
-                            color: iconPickerModal.currentTab === index ? "#ffffff" : "#aaaaaa"
-                            font.pixelSize: 12
-                            font.bold: iconPickerModal.currentTab === index
-                        }
-
-                        MouseArea {
-                            id: tabHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: iconPickerModal.currentTab = index
-                        }
-                    }
-                }
+            TabButton {
+                text: "Emojis & Symbols"
             }
+        }
 
-            // ── Content Area ────────────────────────────────────────────────
-            Item {
-                width: parent.width
-                height: dialogCard.height - 170
+        // Tab Content
+        Item {
+            width: parent.width
+            height: iconPickerDialog.height - 150
+
+            // ── Tab 0: Applications ──────────────────────────────────────────
+            ScrollView {
+                anchors.fill: parent
+                visible: tabBar.currentIndex === 0
                 clip: true
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-                // Tab 0: Applications
                 ListView {
                     id: appsView
-                    anchors.fill: parent
-                    visible: iconPickerModal.currentTab === 0
-                    model: iconPickerModal.filteredAppsList
-                    spacing: 4
+                    model: iconPickerDialog.filteredAppsList
+                    spacing: 2
 
-                    delegate: Rectangle {
+                    delegate: ItemDelegate {
                         width: appsView.width
                         height: 48
-                        radius: 6
-                        color: appRowHover.containsMouse ? "#262638" : "#1a1a24"
-                        border.color: appRowHover.containsMouse ? "#3b82f6" : "#252532"
-                        border.width: 1
 
-                        Row {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 10
+                        contentItem: Row {
                             spacing: 12
                             anchors.verticalCenter: parent.verticalCenter
 
                             Image {
                                 width: 32
                                 height: 32
-                                source: modelData.iconName ? "image://icon/" + modelData.iconName : "image://icon/application-x-executable"
+                                source: modelData.iconName ? ("image://icon/" + modelData.iconName) : "image://icon/application-x-executable"
                                 sourceSize.width: 32
                                 sourceSize.height: 32
                                 anchors.verticalCenter: parent.verticalCenter
@@ -255,20 +133,20 @@ Rectangle {
                             Column {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: 2
-                                width: parent.width - 50
+                                width: appsView.width - 60
 
                                 Text {
                                     text: modelData.name || modelData.appId
-                                    color: "#ffffff"
-                                    font.pixelSize: 13
+                                    color: sysPalette.text
                                     font.bold: true
+                                    font.pixelSize: 13
                                     elide: Text.ElideRight
                                     width: parent.width
                                 }
 
                                 Text {
                                     text: modelData.exec ? ("Exec: " + modelData.exec) : (modelData.iconName ? ("Icon: " + modelData.iconName) : "")
-                                    color: "#777788"
+                                    color: sysPalette.dark
                                     font.pixelSize: 11
                                     elide: Text.ElideRight
                                     width: parent.width
@@ -276,37 +154,32 @@ Rectangle {
                             }
                         }
 
-                        MouseArea {
-                            id: appRowHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                iconPickerModal.appSelected(modelData)
-                                iconPickerModal.close()
-                            }
+                        onClicked: {
+                            iconPickerDialog.appSelected(modelData)
+                            iconPickerDialog.close()
                         }
                     }
                 }
+            }
 
-                // Tab 1: System Theme Icons
+            // ── Tab 1: System Icons ──────────────────────────────────────────
+            ScrollView {
+                anchors.fill: parent
+                visible: tabBar.currentIndex === 1
+                clip: true
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
                 GridView {
                     id: iconsGrid
-                    anchors.fill: parent
-                    visible: iconPickerModal.currentTab === 1
                     cellWidth: 80
                     cellHeight: 76
-                    model: iconPickerModal.filteredIconsList
+                    model: iconPickerDialog.filteredIconsList
 
-                    delegate: Rectangle {
-                        width: 74
-                        height: 70
-                        radius: 6
-                        color: iconTileHover.containsMouse ? "#28283e" : "#191924"
-                        border.color: iconTileHover.containsMouse ? "#3b82f6" : "#232330"
-                        border.width: 1
+                    delegate: ItemDelegate {
+                        width: 76
+                        height: 72
 
-                        Column {
+                        contentItem: Column {
                             anchors.centerIn: parent
                             spacing: 4
 
@@ -321,77 +194,55 @@ Rectangle {
 
                             Text {
                                 text: modelData
-                                color: "#aaaaaa"
+                                color: sysPalette.text
                                 font.pixelSize: 9
-                                width: 68
+                                width: 70
                                 elide: Text.ElideMiddle
                                 horizontalAlignment: Text.AlignHCenter
                                 anchors.horizontalCenter: parent.horizontalCenter
                             }
                         }
 
-                        MouseArea {
-                            id: iconTileHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                iconPickerModal.iconSelected(modelData)
-                                iconPickerModal.close()
-                            }
+                        onClicked: {
+                            iconPickerDialog.iconSelected(modelData)
+                            iconPickerDialog.close()
                         }
                     }
                 }
+            }
 
-                // Tab 2: Emojis & Symbols
-                Flickable {
-                    anchors.fill: parent
-                    visible: iconPickerModal.currentTab === 2
-                    contentHeight: emojiFlow.height + 20
-                    clip: true
+            // ── Tab 2: Emojis & Symbols ──────────────────────────────────────
+            ScrollView {
+                anchors.fill: parent
+                visible: tabBar.currentIndex === 2
+                clip: true
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-                    Flow {
-                        id: emojiFlow
-                        width: parent.width
-                        spacing: 8
+                Flow {
+                    width: parent.width
+                    spacing: 8
 
-                        property var emojis: [
-                            "🌐", "⚙", "🎵", "🎮", "📺", "💻", "🎬", "📻",
-                            "⏯", "⏭", "⏮", "🔊", "🔉", "🔇", "🔍", "▶", "◀",
-                            "⏻", "↺", "💤", "🔒", "🚪", "⚡", "🔋", "📶", "🛡",
-                            "📁", "📂", "📄", "📋", "💾", "🛠", "🔧", "🔨",
-                            "🖥", "⌨", "🖱", "📦", "🚀", "💡", "📌", "✨", "🔥", "⭐",
-                            "💬", "✉", "📞", "🌍", "🦊", "🐱", "🎧", "🎨", "📸",
-                            "🍎", "🐧", "🚀", "🌟", "🎯", "💎", "🔮", "🍕", "☕"
-                        ]
+                    property var emojis: [
+                        "🌐", "⚙", "🎵", "🎮", "📺", "💻", "🎬", "📻",
+                        "⏯", "⏭", "⏮", "🔊", "🔉", "🔇", "🔍", "▶", "◀",
+                        "⏻", "↺", "💤", "🔒", "🚪", "⚡", "🔋", "📶", "🛡",
+                        "📁", "📂", "📄", "📋", "💾", "🛠", "🔧", "🔨",
+                        "🖥", "⌨", "🖱", "📦", "🚀", "💡", "📌", "✨", "🔥", "⭐",
+                        "💬", "✉", "📞", "🌍", "🦊", "🐱", "🎧", "🎨", "📸",
+                        "🍎", "🐧", "🎯", "💎", "🔮", "🍕", "☕"
+                    ]
 
-                        Repeater {
-                            model: emojiFlow.emojis
+                    Repeater {
+                        model: parent.emojis
 
-                            Rectangle {
-                                width: 44
-                                height: 44
-                                radius: 8
-                                color: emojiHover.containsMouse ? "#35354a" : "#1f1f2a"
-                                border.color: emojiHover.containsMouse ? "#3b82f6" : "#2a2a3a"
-                                border.width: 1
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData
-                                    font.pixelSize: 22
-                                }
-
-                                MouseArea {
-                                    id: emojiHover
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        iconPickerModal.emojiSelected(modelData)
-                                        iconPickerModal.close()
-                                    }
-                                }
+                        Button {
+                            width: 46
+                            height: 46
+                            text: modelData
+                            font.pixelSize: 20
+                            onClicked: {
+                                iconPickerDialog.emojiSelected(modelData)
+                                iconPickerDialog.close()
                             }
                         }
                     }

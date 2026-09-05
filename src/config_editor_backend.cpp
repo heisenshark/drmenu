@@ -43,8 +43,10 @@ QStringList ConfigEditorBackend::availableConfigFiles() {
 
     QStringList result;
     for (const QFileInfo &fi : list) {
-        // Skip schema files from normal editing choices
-        if (fi.fileName().contains("schema")) continue;
+        QString fn = fi.fileName().toLower();
+        // Skip schema files and non-drmenu tooling files (like biome.jsonc)
+        if (fn.contains("schema") || fn.contains("biome") || fn.startsWith("package") || fn.startsWith("tsconfig"))
+            continue;
         result.append(fi.absoluteFilePath());
     }
 

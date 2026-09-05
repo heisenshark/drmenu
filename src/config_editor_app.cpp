@@ -13,7 +13,9 @@ int ConfigEditorApp::run(int argc, char *argv[], const QString &initialConfigPat
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
-    qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
+    if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {
+        qputenv("QT_QUICK_CONTROLS_STYLE", "Fusion");
+    }
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("drmenu-config");
