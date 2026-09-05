@@ -105,6 +105,7 @@ Window {
     Shortcut {
         sequence: "Ctrl+T"
         onActivated: {
+            editorWindow.saveActiveConfig()
             if (configBackend) configBackend.testMenu(selectedMenuKey, activeFilePath)
         }
     }
@@ -169,6 +170,7 @@ Window {
                     ToolTip.text: "Launch standalone test of selected menu (Ctrl+T)"
                     ToolTip.visible: hovered
                     onClicked: {
+                        editorWindow.saveActiveConfig()
                         if (configBackend) configBackend.testMenu(editorWindow.selectedMenuKey, editorWindow.activeFilePath)
                     }
                 }
@@ -690,15 +692,47 @@ Window {
 
                                     Label { text: "Theme Preset:"; font.bold: true }
                                     ComboBox {
+                                        id: themeComboBox
                                         width: menuSettingsCol.width
                                         model: configBackend ? configBackend.availableThemes() : []
-                                        currentIndex: {
-                                            let cur = editorWindow.currentMenuData().theme || editorWindow.configDoc.theme || "user-glass"
-                                            return model.indexOf(cur)
+
+                                        function updateCurrentThemeIndex() {
+                                            let cur = editorWindow.currentMenuData().theme || (editorWindow.configDoc ? editorWindow.configDoc.theme : "") || "user-glass"
+                                            let idx = model.indexOf(cur)
+                                            if (idx !== -1) currentIndex = idx
                                         }
+
+                                        Component.onCompleted: updateCurrentThemeIndex()
+
+                                        Connections {
+                                            target: editorWindow
+                                            function onSelectedMenuKeyChanged() {
+                                                themeComboBox.updateCurrentThemeIndex()
+                                            }
+                                            function onMenusMapChanged() {
+                                                themeComboBox.updateCurrentThemeIndex()
+                                            }
+                                        }
+
                                         onActivated: function(index) {
                                             let selected = model[index]
-                                            menuSettingsCol.setMenuProperty("theme", selected)
+                                            let m = Object.assign({}, editorWindow.currentMenuData())
+                                            m.theme = selected
+                                            // Prune conflicting theme overrides from menu.style, preserving layout
+                                            if (m.style) {
+                                                let cleanStyle = {}
+                                                if (m.style.layout) {
+                                                    cleanStyle.layout = m.style.layout
+                                                }
+                                                m.style = cleanStyle
+                                            }
+                                            let copy = Object.assign({}, editorWindow.menusMap)
+                                            copy[editorWindow.selectedMenuKey] = m
+                                            editorWindow.menusMap = copy
+
+                                            if (editorWindow.selectedMenuKey === "main" && editorWindow.configDoc) {
+                                                editorWindow.configDoc.theme = selected
+                                            }
                                         }
                                     }
 

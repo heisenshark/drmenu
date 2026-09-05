@@ -171,6 +171,8 @@ ParsedArgs CliParser::parse(int argc, char *argv[]) {
             args.pingMode = true;
         } else if (a == "--editor" || a == "--settings" || a == "--config-gui" || a == "-e" || a == "-s") {
             args.editorMode = true;
+        } else if (a == "--standalone") {
+            args.standaloneMode = true;
         } else if ((a == "--menu" || a == "-m") && i + 1 < argc) {
             args.menuName = QString(argv[++i]);
         } else if ((a == "--config" || a == "-c") && i + 1 < argc) {

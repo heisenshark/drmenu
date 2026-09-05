@@ -233,20 +233,30 @@ QVariantMap ConfigLoader::loadStyle(const QString &menuName, const QString &conf
     if (root.isEmpty()) return ThemeManager::resolveStyle("blender");
 
     QString theme = root.contains("theme") ? root["theme"].toString() : "blender";
-    QVariantMap styleOverrides = root.contains("style") ? root["style"].toObject().toVariantMap() : QVariantMap{};
+    QVariantMap styleOverrides;
 
     // Support user-defined custom themes in config.json under "themes"
     QJsonObject customThemes = root.contains("themes") ? root["themes"].toObject() : QJsonObject{};
 
     if (!menuName.isEmpty() && root.contains("menus")) {
         QJsonObject menuObj = root["menus"].toObject()[menuName].toObject();
-        if (menuObj.contains("theme"))
+        if (menuObj.contains("theme")) {
             theme = menuObj["theme"].toString();
-        if (menuObj.contains("style")) {
-            QVariantMap menuStyle = menuObj["style"].toObject().toVariantMap();
-            for (auto it = menuStyle.cbegin(); it != menuStyle.cend(); ++it)
-                styleOverrides[it.key()] = it.value();
+            if (menuObj.contains("style")) {
+                styleOverrides = menuObj["style"].toObject().toVariantMap();
+            }
+        } else {
+            if (root.contains("style"))
+                styleOverrides = root["style"].toObject().toVariantMap();
+            if (menuObj.contains("style")) {
+                QVariantMap menuStyle = menuObj["style"].toObject().toVariantMap();
+                for (auto it = menuStyle.cbegin(); it != menuStyle.cend(); ++it)
+                    styleOverrides[it.key()] = it.value();
+            }
         }
+    } else {
+        if (root.contains("style"))
+            styleOverrides = root["style"].toObject().toVariantMap();
     }
 
     if (customThemes.contains(theme)) {

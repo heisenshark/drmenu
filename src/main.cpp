@@ -44,8 +44,10 @@ int main(int argc, char *argv[]) {
         ConfigLoader::MenuOptions opts = ConfigLoader::loadMenuOptions(args.menuName, args.configPath);
         QVariantMap initialStyle        = ConfigLoader::loadStyle(args.menuName, args.configPath);
 
-        if (ClientRunner::tryRunMenus(allMenus, args.menuName, opts.spawnAtMouse, opts.escapeClosesAll, initialStyle))
-            return 0;
+        if (!args.standaloneMode && args.configPath.isEmpty()) {
+            if (ClientRunner::tryRunMenus(allMenus, args.menuName, opts.spawnAtMouse, opts.escapeClosesAll, initialStyle))
+                return 0;
+        }
 
         return StandaloneApp::run(argc, argv, allMenus, args.menuName, opts.spawnAtMouse, opts.escapeClosesAll, initialStyle);
     }
@@ -63,7 +65,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (ClientRunner::tryRun(args.items, QVariantMap()))
+    if (!args.standaloneMode && ClientRunner::tryRun(args.items, QVariantMap()))
         return 0;
 
     return StandaloneApp::runItems(argc, argv, args.items, QVariantMap());

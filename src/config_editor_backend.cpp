@@ -171,6 +171,7 @@ QStringList ConfigEditorBackend::availableThemes() {
 
 void ConfigEditorBackend::testMenu(const QString &menuName, const QString &configPath) {
     QStringList args;
+    args << "--standalone";
     if (!menuName.isEmpty()) {
         args << "--menu" << menuName;
     }

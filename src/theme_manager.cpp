@@ -1023,6 +1023,23 @@ QVariantMap ThemeManager::resolveStyle(const QString &themeName, const QVariantM
         if (!style.contains("optionRectHoverColor")) style["optionRectHoverColor"] = "#600a84ff";
         if (!style.contains("optionRectBorder")) style["optionRectBorder"] = "#35ffffff";
         if (!style.contains("optionRectHoverBorder")) style["optionRectHoverBorder"] = "#0a84ff";
+    } else {
+        if (!style.contains("pieSliceColor") && style.contains("pillColor"))
+            style["pieSliceColor"] = style["pillColor"];
+        if (!style.contains("pieSliceHoverColor") && style.contains("pillHoverColor"))
+            style["pieSliceHoverColor"] = style["pillHoverColor"];
+        if (!style.contains("pieSliceSubmenuColor")) {
+            if (style.contains("pillSubmenuColor")) style["pieSliceSubmenuColor"] = style["pillSubmenuColor"];
+            else if (style.contains("pillColor"))   style["pieSliceSubmenuColor"] = style["pillColor"];
+        }
+        if (!style.contains("pieSliceSubmenuHoverColor")) {
+            if (style.contains("pillSubmenuHoverColor")) style["pieSliceSubmenuHoverColor"] = style["pillSubmenuHoverColor"];
+            else if (style.contains("pillHoverColor"))   style["pieSliceSubmenuHoverColor"] = style["pillHoverColor"];
+        }
+        if (!style.contains("pieOuterBorderColor") && style.contains("pillBorderColor"))
+            style["pieOuterBorderColor"] = style["pillBorderColor"];
+        if (!style.contains("delimiterColor") && style.contains("pillBorderColor"))
+            style["delimiterColor"] = style["pillBorderColor"];
     }
 
     return style;
