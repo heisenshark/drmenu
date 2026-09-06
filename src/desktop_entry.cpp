@@ -20,9 +20,26 @@ static QString cleanExec(const QString &exec) {
 static QString findDesktopFile(const QString &appId) {
     QStringList dataDirs = QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation);
 
+    QStringList extraDirs = {
+        "/run/current-system/sw/share/applications",
+        QDir::homePath() + "/.nix-profile/share/applications",
+        QDir::homePath() + "/.local/state/nix/profile/share/applications",
+        "/etc/profiles/per-user/" + qgetenv("USER") + "/share/applications",
+        QDir::homePath() + "/.local/share/flatpak/exports/share/applications",
+        "/var/lib/flatpak/exports/share/applications",
+        "/usr/local/share/applications",
+        "/usr/share/applications"
+    };
+    for (const QString &d : extraDirs) {
+        if (!dataDirs.contains(d) && QDir(d).exists()) {
+            dataDirs.append(d);
+        }
+    }
+
     // Also add subdirectories (e.g. /usr/share/applications/kde/, etc.)
     QStringList searchDirs;
     for (const QString &base : dataDirs) {
+        if (!QDir(base).exists()) continue;
         searchDirs << base;
         QDirIterator it(base, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
         while (it.hasNext()) searchDirs << it.next();
@@ -63,12 +80,19 @@ MenuItem DesktopEntry::resolve(const QString &appId) {
     MenuItem item;
     QString path = findDesktopFile(appId);
     if (path.isEmpty()) {
-        QTextStream(stderr) << "drmenu: could not find .desktop file for '" << appId << "'\n";
+        item.label = appId;
+        item.iconName = appId;
+        item.command = appId;
         return item;
     }
 
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return item;
+    if (!file.open(QIODevice::ReadOnly)) {
+        item.label = appId;
+        item.iconName = appId;
+        item.command = appId;
+        return item;
+    }
 
     bool inDesktopEntry = false;
     QTextStream ts(&file);
@@ -93,9 +117,10 @@ MenuItem DesktopEntry::resolve(const QString &appId) {
             item.command = cleanExec(line.mid(5).trimmed());
     }
 
-    // Fallback: use appId as label or iconName if missing
+    // Fallback: use appId as label, iconName, and command if missing
     if (item.label.isEmpty()) item.label = appId;
     if (item.iconName.isEmpty()) item.iconName = appId;
+    if (item.command.isEmpty()) item.command = appId;
 
     return item;
 }
@@ -105,6 +130,22 @@ QList<QVariantMap> DesktopEntry::listAllApplications() {
     QSet<QString> seenApps;
 
     QStringList dataDirs = QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation);
+    QStringList extraDirs = {
+        "/run/current-system/sw/share/applications",
+        QDir::homePath() + "/.nix-profile/share/applications",
+        QDir::homePath() + "/.local/state/nix/profile/share/applications",
+        "/etc/profiles/per-user/" + qgetenv("USER") + "/share/applications",
+        QDir::homePath() + "/.local/share/flatpak/exports/share/applications",
+        "/var/lib/flatpak/exports/share/applications",
+        "/usr/local/share/applications",
+        "/usr/share/applications"
+    };
+    for (const QString &d : extraDirs) {
+        if (!dataDirs.contains(d) && QDir(d).exists()) {
+            dataDirs.append(d);
+        }
+    }
+
     QStringList searchDirs;
     for (const QString &base : dataDirs) {
         if (!QDir(base).exists()) continue;

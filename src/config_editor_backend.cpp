@@ -115,6 +115,18 @@ QVariantList ConfigEditorBackend::installedApps() {
     return m_cachedApps;
 }
 
+QVariantMap ConfigEditorBackend::resolveApp(const QString &appId) {
+    QString id = appId.trimmed();
+    if (id.isEmpty()) return {};
+    MenuItem item = DesktopEntry::resolve(id);
+    QVariantMap res;
+    res["appId"]    = id;
+    res["label"]    = item.label;
+    res["iconName"] = item.iconName;
+    res["command"]  = item.command;
+    return res;
+}
+
 QStringList ConfigEditorBackend::searchSystemIcons(const QString &query, int limit) {
     QMutexLocker locker(&m_mutex);
     QString q = query.trimmed().toLower();

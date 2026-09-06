@@ -24,9 +24,9 @@ Dialog {
         colorGroup: SystemPalette.Active
     }
 
-    function openPicker() {
+    function openPicker(tabIndex) {
         searchField.text = ""
-        tabBar.currentIndex = 0
+        tabBar.currentIndex = (typeof tabIndex === "number") ? tabIndex : 0
         refreshLists()
         open()
         searchField.forceActiveFocus()

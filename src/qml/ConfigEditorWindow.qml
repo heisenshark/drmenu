@@ -78,6 +78,23 @@ Window {
         return []
     }
 
+    function getResolvedItem(item) {
+        if (!item) return {}
+        if (item.app) {
+            let res = configBackend ? configBackend.resolveApp(item.app) : {}
+            return {
+                app: item.app,
+                label: (item.label !== undefined && item.label !== "") ? item.label : (res.label || item.app),
+                icon: item.icon || "",
+                iconName: (item.iconName !== undefined && item.iconName !== "") ? item.iconName : (!item.icon ? (res.iconName || item.app) : ""),
+                command: (item.command !== undefined && item.command !== "") ? item.command : (res.command || item.app),
+                submenu: item.submenu || "",
+                key: item.key || ""
+            }
+        }
+        return item
+    }
+
     function saveActiveConfig() {
         if (!configBackend || !activeFilePath) return
         configDoc.menus = menusMap
@@ -389,6 +406,8 @@ Window {
                                     height: 48
                                     highlighted: editorWindow.selectedItemIndex === index
 
+                                    property var resolved: editorWindow.getResolvedItem(modelData)
+
                                     contentItem: Row {
                                         spacing: 10
                                         anchors.verticalCenter: parent.verticalCenter
@@ -404,15 +423,15 @@ Window {
                                             anchors.verticalCenter: parent.verticalCenter
 
                                             Text {
-                                                visible: modelData.icon !== undefined && modelData.icon !== ""
-                                                text: modelData.icon || ""
+                                                visible: Boolean(resolved.icon)
+                                                text: resolved.icon || ""
                                                 font.pixelSize: 18
                                                 anchors.centerIn: parent
                                             }
 
                                             Image {
-                                                visible: !modelData.icon && (modelData.iconName !== undefined && modelData.iconName !== "")
-                                                source: modelData.iconName ? ("image://icon/" + modelData.iconName) : ""
+                                                visible: Boolean(!resolved.icon && resolved.iconName)
+                                                source: resolved.iconName ? ("image://icon/" + resolved.iconName) : ""
                                                 sourceSize.width: 24
                                                 sourceSize.height: 24
                                                 width: 24
@@ -421,7 +440,7 @@ Window {
                                             }
 
                                             Text {
-                                                visible: !modelData.icon && !modelData.iconName
+                                                visible: Boolean(!resolved.icon && !resolved.iconName)
                                                 text: "⚙"
                                                 font.pixelSize: 16
                                                 color: sysPalette.dark
@@ -435,7 +454,7 @@ Window {
                                             spacing: 2
 
                                             Text {
-                                                text: modelData.label || modelData.app || "(untitled)"
+                                                text: resolved.label || resolved.app || "(untitled)"
                                                 color: parent.parent.parent.highlighted ? sysPalette.highlightedText : sysPalette.text
                                                 font.bold: true
                                                 font.pixelSize: 13
@@ -444,7 +463,7 @@ Window {
                                             }
 
                                             Text {
-                                                text: modelData.submenu ? ("Submenu ➔ " + modelData.submenu) : (modelData.command ? modelData.command : (modelData.app ? ("App: " + modelData.app) : ""))
+                                                text: resolved.submenu ? ("Submenu ➔ " + resolved.submenu) : (modelData.app ? ("App: " + modelData.app) : (resolved.command || ""))
                                                 color: parent.parent.parent.highlighted ? sysPalette.highlightedText : sysPalette.dark
                                                 font.pixelSize: 11
                                                 elide: Text.ElideRight
@@ -510,6 +529,7 @@ Window {
                                         }
                                         return null
                                     }
+                                    property var resolvedItem: editorWindow.getResolvedItem(activeItem)
 
                                     function setItemProperty(prop, value) {
                                         let items = editorWindow.currentItems().slice()
@@ -537,11 +557,51 @@ Window {
                                         width: itemDetailsPane.width
                                         spacing: 10
 
+                                        // ── Desktop Application Field ─────────────────────
+                                        Label { text: "Desktop Application (App ID):"; font.bold: true }
+                                        RowLayout {
+                                            width: itemFormCol.width
+                                            spacing: 8
+
+                                            TextField {
+                                                Layout.fillWidth: true
+                                                text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.app || "") : ""
+                                                placeholderText: "e.g. kitty, vesktop, zen, antigravity"
+                                                selectByMouse: true
+                                                onTextEdited: itemDetailsPane.setItemProperty("app", text)
+                                            }
+
+                                            Button {
+                                                text: "Browse Apps..."
+                                                onClicked: iconPickerDialog.openPicker(0)
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            visible: Boolean(itemDetailsPane.activeItem && itemDetailsPane.activeItem.app)
+                                            width: itemFormCol.width
+                                            height: appInfoText.implicitHeight + 14
+                                            radius: 4
+                                            color: sysPalette.alternateBase
+                                            border.color: sysPalette.mid
+                                            border.width: 1
+
+                                            Text {
+                                                id: appInfoText
+                                                anchors.fill: parent
+                                                anchors.margins: 7
+                                                text: "💡 App Mode: Icon, command, and title are automatically loaded from desktop entry. Fields below are optional overrides."
+                                                color: sysPalette.text
+                                                font.pixelSize: 11
+                                                wrapMode: Text.WordWrap
+                                            }
+                                        }
+
                                         Label { text: "Label / Title:"; font.bold: true }
                                         TextField {
                                             width: itemFormCol.width
                                             text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.label || "") : ""
-                                            placeholderText: "Action label (e.g. Google Antigravity)"
+                                            placeholderText: (itemDetailsPane.activeItem && itemDetailsPane.activeItem.app && itemDetailsPane.resolvedItem) ? itemDetailsPane.resolvedItem.label : "Action label (e.g. Google Antigravity)"
                                             selectByMouse: true
                                             onTextEdited: itemDetailsPane.setItemProperty("label", text)
                                         }
@@ -560,15 +620,15 @@ Window {
                                                 border.width: 1
 
                                                 Text {
-                                                    visible: Boolean(itemDetailsPane.activeItem && itemDetailsPane.activeItem.icon)
-                                                    text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.icon || "") : ""
+                                                    visible: Boolean(itemDetailsPane.resolvedItem && itemDetailsPane.resolvedItem.icon)
+                                                    text: itemDetailsPane.resolvedItem ? (itemDetailsPane.resolvedItem.icon || "") : ""
                                                     font.pixelSize: 22
                                                     anchors.centerIn: parent
                                                 }
 
                                                 Image {
-                                                    visible: Boolean(itemDetailsPane.activeItem && !itemDetailsPane.activeItem.icon && itemDetailsPane.activeItem.iconName)
-                                                    source: (itemDetailsPane.activeItem && itemDetailsPane.activeItem.iconName) ? ("image://icon/" + itemDetailsPane.activeItem.iconName) : ""
+                                                    visible: Boolean(itemDetailsPane.resolvedItem && !itemDetailsPane.resolvedItem.icon && itemDetailsPane.resolvedItem.iconName)
+                                                    source: (itemDetailsPane.resolvedItem && itemDetailsPane.resolvedItem.iconName) ? ("image://icon/" + itemDetailsPane.resolvedItem.iconName) : ""
                                                     sourceSize.width: 32
                                                     sourceSize.height: 32
                                                     width: 32
@@ -580,7 +640,16 @@ Window {
                                             Button {
                                                 text: "Browse Icons & Apps..."
                                                 Layout.fillWidth: true
-                                                onClicked: iconPickerDialog.openPicker()
+                                                onClicked: iconPickerDialog.openPicker(1)
+                                            }
+
+                                            Button {
+                                                text: "Clear Override"
+                                                visible: Boolean(itemDetailsPane.activeItem && itemDetailsPane.activeItem.app && (itemDetailsPane.activeItem.icon || itemDetailsPane.activeItem.iconName))
+                                                onClicked: {
+                                                    itemDetailsPane.setItemProperty("icon", "")
+                                                    itemDetailsPane.setItemProperty("iconName", "")
+                                                }
                                             }
                                         }
 
@@ -595,7 +664,7 @@ Window {
                                                 TextField {
                                                     Layout.fillWidth: true
                                                     text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.iconName || "") : ""
-                                                    placeholderText: "e.g. antigravity"
+                                                    placeholderText: (itemDetailsPane.activeItem && itemDetailsPane.activeItem.app && itemDetailsPane.resolvedItem) ? itemDetailsPane.resolvedItem.iconName : "e.g. antigravity"
                                                     selectByMouse: true
                                                     onTextEdited: itemDetailsPane.setItemProperty("iconName", text)
                                                 }
@@ -619,7 +688,7 @@ Window {
                                         TextField {
                                             width: itemFormCol.width
                                             text: itemDetailsPane.activeItem ? (itemDetailsPane.activeItem.command || "") : ""
-                                            placeholderText: "e.g. antigravity %U"
+                                            placeholderText: (itemDetailsPane.activeItem && itemDetailsPane.activeItem.app && itemDetailsPane.resolvedItem) ? itemDetailsPane.resolvedItem.command : "e.g. antigravity %U"
                                             selectByMouse: true
                                             onTextEdited: itemDetailsPane.setItemProperty("command", text)
                                         }
@@ -788,10 +857,13 @@ Window {
             let items = editorWindow.currentItems().slice()
             if (editorWindow.selectedItemIndex < 0 || editorWindow.selectedItemIndex >= items.length) return
             let it = Object.assign({}, items[editorWindow.selectedItemIndex])
-            it.label = app.name || app.appId
-            it.command = app.exec || ""
-            it.iconName = app.iconName || ""
+            it.app = app.appId
+            // Prune redundant fields so config remains clean and minimal
+            delete it.label
+            delete it.command
+            delete it.iconName
             delete it.icon
+            delete it.submenu
             items[editorWindow.selectedItemIndex] = it
             let m = editorWindow.currentMenuData()
             m.items = items

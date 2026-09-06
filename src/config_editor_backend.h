@@ -23,6 +23,7 @@ public:
     Q_INVOKABLE QVariantMap loadConfig(const QString &filePath);
     Q_INVOKABLE bool saveConfig(const QString &filePath, const QVariantMap &configData);
     Q_INVOKABLE QVariantList installedApps();
+    Q_INVOKABLE QVariantMap resolveApp(const QString &appId);
     Q_INVOKABLE QStringList searchSystemIcons(const QString &query, int limit = 120);
     Q_INVOKABLE QStringList availableThemes();
     Q_INVOKABLE void testMenu(const QString &menuName, const QString &configPath);
