@@ -373,7 +373,7 @@ Window {
                             }
 
                             Button {
-                                text: "🗑 Delete"
+                                text: "- Delete"
                                 enabled: editorWindow.selectedItemIndex >= 0 && editorWindow.currentItems().length > 0
                                 onClicked: {
                                     let idx = editorWindow.selectedItemIndex
