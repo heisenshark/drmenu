@@ -23,3 +23,7 @@ result
 result-*
 build-plugin/
 *.so
+
+# Editor & AI assistant local data
+.cursor/
+.gemini/
