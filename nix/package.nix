@@ -26,6 +26,7 @@ stdenv.mkDerivation {
     qt6.qtbase
     qt6.qtdeclarative
     qt6.qtsvg
+    qt6.qtwayland
     kdePackages.layer-shell-qt
     kdePackages.kirigami
   ];

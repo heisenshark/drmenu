@@ -22,26 +22,17 @@ public:
         QString libPlugins = QLibraryInfo::path(QLibraryInfo::PluginsPath);
         if (!libPlugins.isEmpty()) QCoreApplication::addLibraryPath(libPlugins);
 
-        // NixOS system and user profile paths
-        engine.addImportPath(QStringLiteral("/run/current-system/sw/lib/qt-6/qml"));
-        engine.addImportPath(QDir::homePath() + QStringLiteral("/.nix-profile/lib/qt-6/qml"));
-        engine.addImportPath(QDir::homePath() + QStringLiteral("/.local/state/nix/profile/lib/qt-6/qml"));
-        engine.addImportPath(QStringLiteral("/etc/profiles/per-user/") + qgetenv("USER") + QStringLiteral("/lib/qt-6/qml"));
-
-        QCoreApplication::addLibraryPath(QStringLiteral("/run/current-system/sw/lib/qt-6/plugins"));
-        QCoreApplication::addLibraryPath(QDir::homePath() + QStringLiteral("/.nix-profile/lib/qt-6/plugins"));
-        QCoreApplication::addLibraryPath(QDir::homePath() + QStringLiteral("/.local/state/nix/profile/lib/qt-6/plugins"));
-        QCoreApplication::addLibraryPath(QStringLiteral("/etc/profiles/per-user/") + qgetenv("USER") + QStringLiteral("/lib/qt-6/plugins"));
-
-        // Nix environment variables
+        // Nix environment variables (from nix wrappers or direnv)
         const char *varNames[] = {
             "NIXPKGS_QT6_QML_IMPORT_PATH",
             "NIXPKGS_QML_SEARCH_PATHS",
             "QML2_IMPORT_PATH"
         };
+        bool hasQmlEnv = false;
         for (const char *var : varNames) {
             const char *val = getenv(var);
             if (val && val[0]) {
+                hasQmlEnv = true;
                 for (const QString &p : QString(val).split(':', Qt::SkipEmptyParts)) {
                     engine.addImportPath(p);
                 }
@@ -53,6 +44,21 @@ public:
             for (const QString &p : QString(pluginVal).split(':', Qt::SkipEmptyParts)) {
                 QCoreApplication::addLibraryPath(p);
             }
+        }
+
+        // NixOS system and user profile fallback paths (ONLY if not wrapped by Nix)
+        if (!hasQmlEnv) {
+            engine.addImportPath(QStringLiteral("/run/current-system/sw/lib/qt-6/qml"));
+            engine.addImportPath(QDir::homePath() + QStringLiteral("/.nix-profile/lib/qt-6/qml"));
+            engine.addImportPath(QDir::homePath() + QStringLiteral("/.local/state/nix/profile/lib/qt-6/qml"));
+            engine.addImportPath(QStringLiteral("/etc/profiles/per-user/") + qgetenv("USER") + QStringLiteral("/lib/qt-6/qml"));
+        }
+
+        if (!pluginVal || !pluginVal[0]) {
+            QCoreApplication::addLibraryPath(QStringLiteral("/run/current-system/sw/lib/qt-6/plugins"));
+            QCoreApplication::addLibraryPath(QDir::homePath() + QStringLiteral("/.nix-profile/lib/qt-6/plugins"));
+            QCoreApplication::addLibraryPath(QDir::homePath() + QStringLiteral("/.local/state/nix/profile/lib/qt-6/plugins"));
+            QCoreApplication::addLibraryPath(QStringLiteral("/etc/profiles/per-user/") + qgetenv("USER") + QStringLiteral("/lib/qt-6/plugins"));
         }
     }
 };
